@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# 설치(클론 후 1회): git config core.hooksPath scripts/hooks
+set -uo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+bash scripts/check-secrets.sh || exit 1

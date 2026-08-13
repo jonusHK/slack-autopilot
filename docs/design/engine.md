@@ -96,13 +96,16 @@ push → CI 실패 → gh run view --log-failed → 원인 수정 → push → (
 ## 8. 엔진 설정
 
 ```yaml
-# config.yaml (예시 — 시크릿 아님. 토큰은 환경변수)
+# config.yaml — **값이 아니라 환경변수 이름만** 담는다(식별자도 커밋하지 않는다).
 projects:
-  - channel: "<채널 ID>"
-    repo: "<owner>/<repo>"       # AUTOMATION.md 가 있어야 처리한다
+  - channel_env: "SLACK_CHANNEL_ID_SAI"   # 값은 .env / 루틴 시크릿
+    repo_env: "TARGET_REPO_SAI"           # AUTOMATION.md 가 있어야 처리한다
 concurrency: 3
 detect_window_days: 7
 ```
+
+- 기동 시 필수 변수(`SLACK_BOT_TOKEN` + 각 프로젝트의 `*_env`)가 비어 있으면 **즉시 중단**한다
+  — 빈 값으로 엉뚱한 채널을 조회하는 것보다 안 도는 편이 낫다. 이름 목록은 `.env.example`.
 
 ## 9. 이 문서가 정하지 않는 것
 

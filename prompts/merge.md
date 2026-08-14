@@ -24,10 +24,13 @@ python3 bin/detect.py --channel "$SLACK_CHANNEL_ID" --mode merge --days 14
 
 각 PR 마다:
 
-1. `gh pr view <url> --json state,mergeable,mergeStateStatus,files,title`
-   - 이미 `MERGED` 면 ✅ 만 붙이고 넘어간다(재실행 안전).
-   - `CLOSED` 면 ❌ 와 사유.
-2. **CI 확인** — `gh pr checks <url>`. 그린이 아니면 병합하지 않는다. ❌ + 실패한 체크 이름.
+1. `python3 bin/github_api.py pr-get --repo "$TARGET_REPO" --pr <url>`
+   (바뀐 파일 목록은 `pr-files`, 병합은 `pr-merge`)
+   - `merged` 가 참이면 ✅ 만 붙이고 넘어간다(재실행 안전).
+   - `state` 가 `closed` 인데 병합이 아니면 ❌ 와 사유.
+2. **CI 확인** — `python3 bin/github_api.py checks --repo "$TARGET_REPO" --ref <head_sha>`.
+   `success` 가 아니면 병합하지 않는다. ❌ + `failed` 의 검사 이름.
+   `none`(붙은 검사 없음)은 통과가 아니다 — ❓ 로 사람에게 묻는다.
 3. **금지선 확인**(정책 파일 `## 병합 금지선`). 아래에 걸리면 병합하지 말고 ❓ + 이유:
    - 정책이 나열한 금지선 파일이 충돌에 포함
    - 정책이 나열한 민감 경로가 diff 에 포함

@@ -73,7 +73,7 @@
 ## 5. 자기 수정 루프 (D-004)
 
 ```
-push → CI 실패 → gh run view --log-failed → 원인 수정 → push → (반복)
+push → CI 실패 → github_api.py checks 로 실패한 검사 확인 → 원인 수정 → push → (반복)
 ```
 
 - 상한 **5회 / 60분**. 초과 시 ❌ + 마지막 실패 요약 답글 후 정지.
@@ -97,7 +97,8 @@ push → CI 실패 → gh run view --log-failed → 원인 수정 → push → (
   루틴 하나가 채널↔레포 매핑을 순회한다. 클레임이 노드 단위라 프로젝트 수가 늘어도 안전하다.
 - **슬랙 접근은 봇 토큰 + Web API**: `conversations.history` · `conversations.replies` ·
   `reactions.get` · `reactions.add` · `chat.postMessage`. 커넥터(MCP) 의존 금지.
-- GitHub 접근은 클라우드 에이전트의 GitHub 연동 + `gh`.
+- GitHub 접근은 토큰 하나로 통일한다 — `bin/github_api.py` 가 REST API 를 직접 부르고,
+  git 은 자격 저장 파일을 쓴다. **`gh` 에 의존하지 않는다**(VM 에 없을 수 있다).
 - 토큰·자격은 시크릿으로만(값을 코드·문서·로그에 남기지 않는다).
 
 ## 8. 엔진 설정

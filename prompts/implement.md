@@ -19,7 +19,8 @@ python3 bin/detect.py --channel "$SLACK_CHANNEL_ID" --mode triage --days 14
 노드는 **오래된 것부터** 처리한다. 각 노드마다:
 
 1. **스레드를 먼저 읽는다** — 그 스레드에 **미병합 PR** 이 있는지 본다(봇의 📬 답글에 PR
-   링크가 있고, `gh pr view <url> --json state` 가 `OPEN` 이면 미병합).
+   링크가 있고, `python3 bin/github_api.py pr-get --repo "$TARGET_REPO" --pr <url>` 의
+   `state` 가 `open` 이면 미병합).
 2. **락을 건다**(engine.md §3 — 이모지가 아니라 이것이 진짜 락):
    ```bash
    python3 bin/lock.py --repo "$TARGET_REPO" --ts <노드 ts>            # 새 작업
@@ -62,9 +63,13 @@ python3 bin/detect.py --channel "$SLACK_CHANNEL_ID" --mode triage --days 14
 ## 5. CI 그린까지 자기 수정 (D-004)
 
 ```bash
-gh pr checks <pr-url> --watch
-gh run view <run-id> --log-failed
+python3 bin/github_api.py pr-get --repo "$TARGET_REPO" --pr <pr-url>     # head_sha 를 얻는다
+python3 bin/github_api.py checks --repo "$TARGET_REPO" --ref <head_sha>
 ```
+
+`state` 가 `pending` 이면 잠시 뒤 다시 부른다(감시 모드는 없다 — 폴링이다).
+`failure` 면 `failed` 에 실패한 검사 이름이 들어 있다. 로그는 그 검사의 GitHub 화면에서 본다.
+`none` 은 **그린이 아니라 "붙은 검사가 없음"** 이다 — 통과로 치지 않는다.
 
 - 실패하면 원인을 고쳐 다시 민다. **상한 5회 / 60분** — 초과하면 ❌ + 마지막 실패 요약을
   답글로 남기고 그 노드를 놓는다(PR 은 열어 둔다).
@@ -76,7 +81,7 @@ gh run view <run-id> --log-failed
 ## 6. 절대 규칙
 
 - **▶️·🚀 를 붙이지 않는다.** 사람 전용이고 `bin/mark.py` 가 코드로 막는다.
-- **병합하지 않는다.** `gh pr merge` 를 부르지 않는다 — 5단계의 일이다.
+- **병합하지 않는다.** `pr-merge` 를 부르지 않는다 — 5단계의 일이다.
 - **대상 레포의 기본 브랜치에 직접 밀지 않는다.** 자동화의 변경은 전부 PR 을 지난다.
 - 엔진 레포(slack-autopilot)를 이 루틴이 수정하지 않는다.
 - 스코프를 넓히지 않는다. 불릿에 적힌 것만 한다 — "겸사겸사"가 리뷰를 불가능하게 만든다.

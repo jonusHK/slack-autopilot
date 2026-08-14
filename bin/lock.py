@@ -28,13 +28,18 @@ import subprocess
 import sys
 import time
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import github_api  # noqa: E402
+
 BRANCH_PREFIX = "auto/slack-"
 
 
 def run(cmd, cwd=None, check=True):
     p = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
     if check and p.returncode != 0:
-        raise RuntimeError(f"{' '.join(cmd)} → {p.returncode}\n{p.stderr.strip()}")
+        # 이 문구는 실패 알림으로 슬랙까지 간다 — 토큰이 섞일 여지를 남기지 않는다.
+        raise RuntimeError(github_api.scrub(
+            f"{' '.join(cmd)} → {p.returncode}\n{p.stderr.strip()}"))
     return p
 
 
@@ -49,7 +54,9 @@ def ensure_clone(repo, work_dir):
         run(["git", "fetch", "--prune", "origin"], cwd=path)
     else:
         os.makedirs(work_dir, exist_ok=True)
-        run(["gh", "repo", "clone", repo, path])
+        # 토큰은 자격 저장 파일에 있고 주소는 깨끗하다(github_api.setup_git 참조).
+        github_api.setup_git()
+        run(["git", "clone", github_api.clone_url(repo), path])
     return path
 
 
@@ -60,12 +67,11 @@ def remote_has(path, branch):
 
 def has_open_pr(repo, branch):
     """이 브랜치로 열린 PR 이 있는가. 있으면 살아 있는 작업이다(회수 금지)."""
-    p = run(["gh", "pr", "list", "--repo", repo, "--head", branch,
-             "--state", "all", "--json", "number"], check=False)
-    if p.returncode != 0:
+    try:
+        return bool(github_api.pr_list(repo, head=branch, state="all"))
+    except github_api.GitHubError as e:
         # 판단할 수 없으면 **살아 있다고 본다** — 남의 작업을 뺏는 쪽이 더 비싸다.
-        raise RuntimeError(f"PR 조회 실패(회수 판단 불가): {p.stderr.strip()}")
-    return p.stdout.strip() not in ("", "[]")
+        raise RuntimeError(f"PR 조회 실패(회수 판단 불가): {e}")
 
 
 def branch_age_minutes(path, branch):

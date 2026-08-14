@@ -48,5 +48,6 @@ slack-autopilot 엔진의 루틴이다. 명세는 레포 안에 있고, 이 프�
 ## VM 접근 권한
 
 엔진 레포가 프라이빗이면 `$ENGINE_REPO_URL` 에 토큰을 포함한 형태를 쓴다. 세션 VM 에는
-GitHub 자격이 없고, `gh` 가 설치돼 있지 않을 수도 있다 — 둘 다 실제로 겪었다
+GitHub 자격이 없고, `gh` 는 아예 설치돼 있지 않을 수 있다 — 둘 다 실제로 겪었다.
+그래서 엔진은 `gh` 를 쓰지 않는다(`bin/github_api.py` 가 REST API 를 직접 부른다)
 ([runtime.md](../docs/design/runtime.md) 실패 모드 표).

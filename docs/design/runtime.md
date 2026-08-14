@@ -48,7 +48,7 @@ sequenceDiagram
 | 도는 곳 | 세션 VM(Anthropic 호스팅) | 사람의 맥은 관여하지 않는다 |
 | 자격 증명 | 전용 클라우드 환경의 환경변수 | 시크릿 저장소가 없어 **환경을 전용으로 가른다**(§7) |
 | 슬랙 접근 | 봇 토큰 + Web API(python) | 커넥터(MCP) 의존 금지 — headless 런에 없을 수 있다 |
-| GitHub 접근 | `gh` + 프록시 | VM 안에 실제 자격이 없다. 토큰 설정 불요 |
+| GitHub 접근 | `GH_TOKEN` + REST API | `gh` 가 없을 수 있다. 토큰을 환경변수로 준다 |
 | 무거운 검증 | 대상 레포 CI(4단계) | 에이전트가 e2e 를 직접 돌지 않는다 |
 
 ## 2.5 VM 은 이 맥과 다르다 (프롬프트를 쓰기 전에 볼 것)
@@ -60,6 +60,7 @@ sequenceDiagram
 |---|---|---|
 | `.env` 가 있다 | **없다**(gitignore, 값은 환경변수) | `. ./.env` 를 `&&` 체인에 두어 뒤가 통째로 안 돎 |
 | git 자격이 있다 | **없다.** `gh` 도 없을 수 있다 | 프라이빗 레포 클론이 두 방법 모두로 실패 |
+| `gh` 가 깔려 있다 | **아닐 수 있다** | 한 실행이 설치하느라 시간을 태웠다 → REST API 직접 호출로 전환 |
 | 홈이 내 것 | 이전 세션 잔재가 있을 수 있다 | 남은 디렉터리 재사용 → `rm -rf` 후 새로 받는다 |
 | 커넥터(MCP) 있음 | 없을 수 있다 | 슬랙을 커넥터로 부르지 않고 python 으로 직접 |
 | 도구 다 있음 | `allowed_tools` 로 제한 | 목록에 없는 도구를 전제한 절차 금지 |
@@ -84,7 +85,7 @@ prompts/
   merge.md       5단계 — 🚀 이후 순차 병합
 tests/
   test_detect.py 검출·이모지 가드 규칙(슬랙 없이)
-  test_lock.py   락 회수 규칙(git·gh 없이)
+  test_lock.py   락 회수 규칙(git·네트워크 없이)
   test_prompts.py 프롬프트가 VM 전제를 어기지 않는지(§2.5)
 scripts/
   check-secrets.sh  토큰·슬랙 원시 ID 커밋 차단(pre-commit)
@@ -230,8 +231,9 @@ python3 bin/lock.py --repo owner/name --ts <ts> --reuse <브랜치>  # 미병합
 | `missing_scope` | 스코프 부족 | 필요한 것만 추가하고 재설치. `conversations.list` 를 쓰려다 `channels:read` 를 늘리지 말 것 |
 | "환경변수 누락" | 전용 환경에 값이 없거나 트리거가 다른 환경을 가리킴 | 트리거의 `environment_id` 확인 |
 | **아무 일도 안 일어남**(이모지·답글 무변화) | **기본 Trusted 네트워크가 `slack.com` 을 막는다** — 허용 목록에 슬랙이 없다 | Network access 를 **Custom** 으로, `slack.com` 추가 + "기본 패키지 매니저 목록도 포함" 체크(setup.md §3.5 ④) |
-| `gh: command not found` | **VM 에 `gh` 가 없을 수 있다** — 설치돼 있다고 가정하지 않는다 | 토큰을 포함한 URL 로 `git clone` |
-| `could not read Username for 'https://github.com'` | **VM 에 GitHub 자격이 없다.** 프록시 경로를 타는 것은 `gh` 뿐 — 맨 `git clone` 은 프라이빗 레포에서 죽는다 | `$ENGINE_REPO_URL` 에 토큰을 포함한다 |
+| `gh: command not found` | **VM 에 `gh` 가 없다** — 설치돼 있다고 가정하지 않는다 | `gh` 를 쓰지 않는다. `bin/github_api.py` 가 REST API 를 직접 부른다 |
+| `could not read Username for 'https://github.com'` | **VM 에 GitHub 자격이 없다.** 엔진 레포는 퍼블릭이라 그냥 클론되지만, 대상 레포 push·PR 은 자격이 필요하다 | `github_api.setup_git()` 이 자격 저장 파일을 깔아둔다. 주소에는 토큰을 넣지 않는다 |
+| `GitHub access is not enabled for this session` (HTTP 403) | 클라우드 세션에 GitHub 연동이 없다. 조직 계정이면 관리자만 붙일 수 있다 | `GH_TOKEN` 을 환경변수로 주는 편이 확실하다 — 권한이 대상 레포로 한정되고 관리자를 기다리지 않는다 |
 | 같은 노드가 두 번 처리됨 | 클레임 전에 작업을 시작했다 | 순서는 **클레임 → 작업**. 4단계에서는 브랜치 push 가 먼저 |
 | 봇이 자기 답글을 다시 집음 | ▶️ 를 봇이 붙였다는 뜻 — 있을 수 없다 | `emoji.assert_bot_may_add` 가 막는다. 뚫렸으면 그게 사고다 |
 

@@ -133,7 +133,7 @@ class EmojiGuard(unittest.TestCase):
 
     def test_정의되지_않은_이모지는_거부된다(self):
         with self.assertRaises(RuntimeError):
-            emoji.assert_bot_may_add("eyes")
+            emoji.assert_bot_may_add("tada")
 
 
 class MergeMode(ClockFixed):

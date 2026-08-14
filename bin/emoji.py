@@ -5,7 +5,7 @@
 
 TRIGGER = "arrow_forward"      # ▶️ 진행 필요 — **사람만**
 CLAIM = "speech_balloon"       # 💬 처리 중
-PR_OPEN = "thread"             # 🧵 PR 생성됨
+PR_OPEN = "eyes"               # 👀 PR 열림 — 사람 검토 대기
 NEEDS_DECISION = "question"    # ❓ 결정 필요
 MERGE = "rocket"               # 🚀 병합 진행 — **사람만**
 DONE = "white_check_mark"      # ✅ 병합 완료

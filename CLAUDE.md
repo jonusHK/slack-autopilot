@@ -10,8 +10,10 @@
 구현 전에 결정이 문서에 있어야 한다. 코딩 중 "왜/어떻게"가 궁금하면 코드가 아니라 문서를 본다.
 
 - **결정**: `docs/decisions.md` (D-001~). 불변 로그 — 뒤집을 땐 새 D.
-- **설계**: `docs/design/engine.md`(상태 기계·파이프라인) · `docs/design/policy-contract.md`
-  (대상 레포 `AUTOMATION.md` 계약).
+- **설계**: `docs/design/engine.md`(상태 기계·파이프라인 — **무엇을·왜**) ·
+  `docs/design/runtime.md`(**어떻게 도는가** — 실행 순서·코드 맵·실패 모드·현재 단계) ·
+  `docs/design/policy-contract.md`(대상 레포 `AUTOMATION.md` 계약).
+  둘이 어긋나면 `engine.md` 가 정본이다 — `runtime.md` 는 구현의 기록이라 구현을 따라 고친다.
 - **돌리는 법**: `docs/runbook/setup.md`(봇 앱·토큰·루틴 등록) — 절차와 환경만.
 - 문서 헤더는 `상태: 초안` + 갱신일. 버전 태그(`v0.x`) 금지 — 이력은 Git.
 - 새 결정을 내리면 로그에 먼저 반영하고 코드를 짠다.

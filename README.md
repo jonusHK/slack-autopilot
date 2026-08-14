@@ -27,7 +27,8 @@
 ## 문서
 
 - 결정 로그: [docs/decisions.md](docs/decisions.md)
-- 엔진 설계(상태 기계·파이프라인·락): [docs/design/engine.md](docs/design/engine.md)
+- 엔진 설계(상태 기계·파이프라인·락 — **무엇을·왜**): [docs/design/engine.md](docs/design/engine.md)
+- 런타임(**어떻게 도는가** — 실행 순서·코드 맵·실패 모드·현재 단계): [docs/design/runtime.md](docs/design/runtime.md)
 - 정책 파일 계약(`AUTOMATION.md` 작성법): [docs/design/policy-contract.md](docs/design/policy-contract.md)
 - 셋업(봇 앱·토큰·루틴 등록): [docs/runbook/setup.md](docs/runbook/setup.md)
 

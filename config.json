@@ -2,12 +2,15 @@
   "_comment": "값이 아니라 환경변수 이름만 담는다(식별자도 커밋하지 않는다 — CLAUDE.md).",
   "projects": [
     {
-      "name": "sai",
-      "channel_env": "SLACK_CHANNEL_ID_SAI",
-      "repo_env": "TARGET_REPO_SAI"
+      "name": "main",
+      "channel_env": "SLACK_CHANNEL_ID",
+      "repo_env": "TARGET_REPO"
     }
   ],
   "concurrency": 3,
   "detect_window_days": 14,
-  "self_fix": { "max_attempts": 5, "max_minutes": 60 }
+  "self_fix": {
+    "max_attempts": 5,
+    "max_minutes": 60
+  }
 }

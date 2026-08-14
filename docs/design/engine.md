@@ -1,7 +1,6 @@
 # 설계 — 엔진 (상태 기계 · 파이프라인 · 락)
 
-- 상태: 초안 (2026-08-13) — sai `docs/runbook/slack-automation.md` §1·2·4·5·6·7 을 엔진
-  명세로 이관한 것. 결정의 근거는 `../decisions.md`(D-001~006).
+- 규칙의 정본. 실행·실패 모드는 `runtime.md`, 근거는 `../decisions.md`.
 - 이 문서에 **프로젝트 이름이 나오면 안 된다**(D-001 ④). 프로젝트별 값은 전부
   `policy-contract.md` 의 정책 파일 몫이다.
 
@@ -103,9 +102,9 @@ push → CI 실패 → gh run view --log-failed → 원인 수정 → push → (
 YAML 이 아닌 이유는 표준 라이브러리에 파서가 없어서다(외부 의존 금지 — CLAUDE.md).
 
 ```json
-{"projects": [{"name": "sai",
-               "channel_env": "SLACK_CHANNEL_ID_SAI",
-               "repo_env": "TARGET_REPO_SAI"}],
+{"projects": [{"name": "main",
+               "channel_env": "SLACK_CHANNEL_ID",
+               "repo_env": "TARGET_REPO"}],
  "concurrency": 3, "detect_window_days": 14,
  "self_fix": {"max_attempts": 5, "max_minutes": 60}}
 ```

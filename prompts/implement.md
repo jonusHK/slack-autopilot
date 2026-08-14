@@ -9,9 +9,9 @@
 
 ```bash
 cd ~/slack-autopilot
-# .env 는 로컬 실행용 — VM 에는 없다. 있을 때만 읽는다.
+# .env 는 로컬 실행용 — VM 에는 없다(값은 환경변수). 있을 때만 읽는다.
 [ -f .env ] && { set -a; . ./.env; set +a; } || true   # 없어도 실패가 아니다
-python3 bin/detect.py --channel "$SLACK_CHANNEL_ID_SAI" --mode triage --days 14
+python3 bin/detect.py --channel "$SLACK_CHANNEL_ID" --mode triage --days 14
 ```
 
 `[]` 이면 **아무 보고도 남기지 말고 즉시 종료**한다. 대부분의 실행이 이 경로다.
@@ -22,8 +22,8 @@ python3 bin/detect.py --channel "$SLACK_CHANNEL_ID_SAI" --mode triage --days 14
    링크가 있고, `gh pr view <url> --json state` 가 `OPEN` 이면 미병합).
 2. **락을 건다**(engine.md §3 — 이모지가 아니라 이것이 진짜 락):
    ```bash
-   python3 bin/lock.py --repo "$TARGET_REPO_SAI" --ts <노드 ts>            # 새 작업
-   python3 bin/lock.py --repo "$TARGET_REPO_SAI" --ts <ts> --reuse <브랜치> # 미병합 PR 이 있을 때
+   python3 bin/lock.py --repo "$TARGET_REPO" --ts <노드 ts>            # 새 작업
+   python3 bin/lock.py --repo "$TARGET_REPO" --ts <ts> --reuse <브랜치> # 미병합 PR 이 있을 때
    ```
    종료코드 1 이면 **다른 실행이 잡은 것** — 그 노드는 건너뛴다.
 3. 락을 잡은 뒤에 💬 를 붙인다(`bin/mark.py --emoji speech_balloon`).

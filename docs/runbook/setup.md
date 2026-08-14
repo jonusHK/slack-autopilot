@@ -76,7 +76,7 @@ curl -s -D - -o /dev/null -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
 ## 3. 착수 순서 (단계 도입 — 한 번에 켜지 않는다)
 
 1. ~~**봇 앱 + 토큰**(§1)~~ ✅ **완료(2026-08-14)** — 앱 생성·설치, 스코프 4종 부여 확인,
-   #sai 채널 추가, `.env` 에 토큰·채널 ID·대상 레포 등록. `conversations.history` 응답 확인됨.
+   채널에 앱 추가, 환경변수 등록. `conversations.history` 응답 확인.
    **아직 안 한 것**: `chat:write`·`reactions:write` 의 실제 쓰기 스모크(채널에 흔적이 남으므로
    3단계 첫 루틴 실행에서 겸한다).
 2. **엔진 스크립트 + 첫 소비자 정책 파일** — 이 레포에 검출·클레임 스크립트와 루틴
@@ -105,7 +105,7 @@ curl -s -D - -o /dev/null -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
 
 **③ 환경변수는 로컬 `.env` 가 아니라 클라우드 환경에 있어야 한다.** 루틴은 VM 에서 돌고
 그 VM 에는 이 맥의 `.env` 가 없다(gitignore 라 레포에도 없다). claude.ai 의 **Code →
-Environments → 해당 환경**에 `SLACK_BOT_TOKEN`·`SLACK_CHANNEL_ID_SAI`·`TARGET_REPO_SAI` 를
+Environments → 해당 환경**에 `SLACK_BOT_TOKEN`·`SLACK_CHANNEL_ID`·`TARGET_REPO` 를
 등록해야 한다. 없으면 루틴은 아무것도 하지 않고 "환경변수 누락"만 남기고 끝난다(설계대로).
 
 **④ 기본 네트워크(Trusted)는 `slack.com` 을 막는다.** 이게 가장 오해하기 쉬운 함정이다 —

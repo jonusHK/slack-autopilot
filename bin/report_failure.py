@@ -10,7 +10,7 @@
 - 하루에 같은 사유를 여러 번 떠들지 않게, 호출부가 **실행당 한 번만** 부른다.
 
 사용:
-  python3 bin/report_failure.py --channel C… --reason "환경변수 누락: SLACK_CHANNEL_ID_SAI"
+  python3 bin/report_failure.py --channel C… --reason "환경변수 누락: SLACK_CHANNEL_ID"
 """
 
 import argparse

@@ -12,7 +12,7 @@
 출력: JSON 배열(stdout). 유휴면 `[]` — 호출부는 이걸 보고 즉시 종료해야 한다(토큰 낭비 금지).
 
 사용:
-  SLACK_BOT_TOKEN=… python3 bin/detect.py --channel "$SLACK_CHANNEL_ID_SAI" [--mode triage] [--days 14]
+  SLACK_BOT_TOKEN=… python3 bin/detect.py --channel "$SLACK_CHANNEL_ID" [--mode triage] [--days 14]
 
 창은 **하나**다(기본 14일). 스캔 범위와 판정 기준을 가르지 않는다 — 갈랐더니 "오래된 메시지
 자체에 오늘 ▶️ 를 달면 안 잡힌다"는 사각지대가 생겼고, 증상이 침묵이라 보이지도 않았다.

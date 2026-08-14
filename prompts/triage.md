@@ -7,7 +7,7 @@
 
 ## 0. 준비 — 환경 확인과 실패 보고
 
-**필요한 환경변수**: `SLACK_BOT_TOKEN` · `SLACK_CHANNEL_ID_SAI` · `TARGET_REPO_SAI`.
+**필요한 환경변수**: `SLACK_BOT_TOKEN` · `SLACK_CHANNEL_ID` · `TARGET_REPO`.
 하나라도 비어 있으면 **아무 작업도 하지 말고** §0-b 로 알리고 종료한다. 빈 값으로 엉뚱한
 채널을 조회하는 것보다 안 도는 편이 낫다. **토큰 값은 어떤 형태로도 출력하지 않는다**(마스킹도).
 
@@ -18,7 +18,7 @@
 준비·검출 단계에서 막히면 세션 결과에 사유를 남기고 **채널에도 한 줄** 알린다:
 
 ```bash
-python3 bin/report_failure.py --channel "$SLACK_CHANNEL_ID_SAI" --reason "<한 줄 사유>"
+python3 bin/report_failure.py --channel "$SLACK_CHANNEL_ID" --reason "<한 줄 사유>"
 ```
 
 유휴는 조용해야 하지만 **실패까지 조용하면 눈이 없다** — 2026-08-14 에 루틴이 두 번 연속
@@ -29,10 +29,9 @@ python3 bin/report_failure.py --channel "$SLACK_CHANNEL_ID_SAI" --reason "<한 �
 
 ```bash
 cd ~/slack-autopilot
-# .env 는 **로컬 실행용**이다. VM 에는 없다(gitignore) — 있을 때만 읽는다.
-# `. ./.env` 를 && 체인에 두면 VM 에서 여기서 끊겨 뒤가 통째로 안 돈다(실제로 겪었다).
+# .env 는 로컬 실행용 — VM 에는 없다(값은 환경변수). 있을 때만 읽는다.
 [ -f .env ] && { set -a; . ./.env; set +a; } || true   # 없어도 실패가 아니다
-python3 bin/detect.py --channel "$SLACK_CHANNEL_ID_SAI" --days 14
+python3 bin/detect.py --channel "$SLACK_CHANNEL_ID" --days 14
 ```
 
 **결과가 `[]` 이면 아무것도 하지 말고 즉시 종료한다.** 요약도 보고도 남기지 않는다 —
@@ -40,7 +39,7 @@ python3 bin/detect.py --channel "$SLACK_CHANNEL_ID_SAI" --days 14
 
 ## 2. 정책 파일 읽기
 
-대상 레포(`TARGET_REPO_SAI`)의 루트 `AUTOMATION.md` 를 읽는다.
+대상 레포(`TARGET_REPO`)의 루트 `AUTOMATION.md` 를 읽는다.
 **없으면 분류하지 않는다** — 전 항목을 ❓ 로 두고 "정책 파일이 없어 자동 처리 대상이 아니다"만
 답글로 남긴다(D-001 ③).
 
@@ -51,7 +50,7 @@ python3 bin/detect.py --channel "$SLACK_CHANNEL_ID_SAI" --days 14
 ### 3-1. 클레임
 
 ```bash
-python3 bin/mark.py --channel "$SLACK_CHANNEL_ID_SAI" --ts <노드 ts> --emoji speech_balloon
+python3 bin/mark.py --channel "$SLACK_CHANNEL_ID" --ts <노드 ts> --emoji speech_balloon
 ```
 
 `already` 가 나오면(종료코드 1) **그 노드는 건너뛴다** — 다른 실행이 이미 잡았다.

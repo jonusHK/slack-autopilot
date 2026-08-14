@@ -4,3 +4,9 @@ set -uo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 bash scripts/check-secrets.sh || exit 1
+
+# 프롬프트가 VM 전제를 어기면 커밋을 막는다(로컬 테스트로는 안 걸리는 종류).
+python3 tests/test_prompts.py >/dev/null 2>&1 || {
+  echo "❌ 프롬프트 규칙 위반 — python3 tests/test_prompts.py 로 확인" >&2
+  exit 1
+}

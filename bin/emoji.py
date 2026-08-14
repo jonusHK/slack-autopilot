@@ -5,7 +5,9 @@
 
 TRIGGER = "arrow_forward"      # ▶️ 진행 필요 — **사람만**
 CLAIM = "speech_balloon"       # 💬 처리 중
-PR_OPEN = "eyes"               # 👀 PR 열림 — 사람 검토 대기
+PR_OPEN = "mailbox_with_mail"  # 📬 PR 열림 — 사람 검토 대기
+                               # 사람이 일상적으로 다는 이모지는 쓰지 않는다(👀 를 뺀 이유):
+                               # 상태와 사람의 반응이 섞이면 상태 기계가 오염된다.
 NEEDS_DECISION = "question"    # ❓ 결정 필요
 MERGE = "rocket"               # 🚀 병합 진행 — **사람만**
 DONE = "white_check_mark"      # ✅ 병합 완료

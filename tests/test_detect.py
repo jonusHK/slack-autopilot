@@ -76,6 +76,12 @@ class DetectRules(ClockFixed):
         Fake([msg(t(90), "고쳐줘", [emoji.TRIGGER, emoji.CLAIM])]).install()
         self.assertEqual(detect.detect(CH, 7), [])
 
+    def test_끝난_노드는_클레임이_없어도_제외된다(self):
+        """✅·❌ 는 종료 상태다 — 💬 만 보면 끝난 일을 다시 집는다(실제로 겪었다)."""
+        for done in (emoji.DONE, emoji.FAILED):
+            Fake([msg(t(90), "이미 끝난 지시", [emoji.TRIGGER, done])]).install()
+            self.assertEqual(detect.detect(CH, 7), [], f"{done} 가 붙었는데 다시 잡혔다")
+
     def test_트리거_없으면_잡히지_않는다(self):
         Fake([msg(t(90), "그냥 메모", []),
               msg(t(80), "질문", [emoji.NEEDS_DECISION])]).install()

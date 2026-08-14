@@ -28,10 +28,14 @@ import time
 import emoji
 import slack_api as slack
 
-# (있어야 하는 것, 없어야 하는 것)
+# (있어야 하는 것, 하나라도 있으면 제외할 것들)
+#
+# triage 가 💬 만 보면 **끝난 일을 다시 집는다** — ✅(완료)·❌(실패)가 붙었는데 어떤 이유로든
+# 💬 가 없는 노드가 그렇다(사람이 떼거나, 클레임 전에 상태가 바뀐 경우). 종료 상태는 전부
+# 제외해야 "다음 손이 필요한 것"이라는 정의가 성립한다.
 MODES = {
-    "triage": (emoji.TRIGGER, emoji.CLAIM),
-    "merge": (emoji.MERGE, emoji.DONE),
+    "triage": (emoji.TRIGGER, (emoji.CLAIM, emoji.DONE, emoji.FAILED)),
+    "merge": (emoji.MERGE, (emoji.DONE,)),
 }
 
 
@@ -55,7 +59,7 @@ def detect(channel, days, mode="triage"):
     **창은 하나다.** 스캔 범위와 판정 기준을 가르면 "오래된 메시지 자체에 오늘 ▶️" 가 조용히
     누락된다(실제로 겪었다). 부모가 오래된 스레드의 **새 답글**은 답글 자신이 창 안이므로 잡힌다.
     """
-    require, exclude = MODES[mode]
+    require, excludes = MODES[mode]
     now = time.time()
     cutoff = now - days * 86400
     found = []
@@ -64,7 +68,7 @@ def detect(channel, days, mode="triage"):
         if float(msg["ts"]) < cutoff:
             return                           # 창 밖
         rx = slack.reactions_of(msg)
-        if require in rx and exclude not in rx:
+        if require in rx and not (rx & set(excludes)):
             found.append(_node(msg, channel, kind, parent_ts))
 
     for msg in slack.history(channel, oldest=f"{cutoff:.6f}"):

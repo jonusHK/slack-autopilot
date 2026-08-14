@@ -10,12 +10,15 @@
 - 브랜치 이름은 노드 ts 에서 유도한다 — 같은 노드는 늘 같은 이름이라 재실행이 안전하다.
 - **스레드에 미병합 PR 이 있으면 그 브랜치에 얹는다**(작업 파편화 방지). 그때는 새 락을 걸지
   않고 기존 브랜치를 체크아웃한다.
+- **죽은 락은 회수한다**(§ stale). 락 해제가 없는 설계라, 브랜치를 민 직후 실행이 죽으면
+  그 노드는 영원히 잠긴다 — 다음 실행은 브랜치가 있어 건너뛰고, 메시지에는 💬 가 붙어 있어
+  분류 검출에도 안 잡힌다. 조용한 교착이다.
 
 사용:
   python3 bin/lock.py --repo owner/name --ts 1786675913.239919 [--base main] [--work-dir DIR]
 
-출력(stdout, JSON): {"branch": "...", "mode": "created"|"reused", "path": "..."}
-종료코드 1 = 다른 실행이 이미 잡았다(건너뛰라는 뜻).
+출력(stdout, JSON): {"branch": "...", "mode": "created"|"reused"|"reclaimed", "path": "..."}
+종료코드 1 = 살아 있는 다른 실행이 잡고 있다(건너뛰라는 뜻).
 """
 
 import argparse
@@ -23,6 +26,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 
 BRANCH_PREFIX = "auto/slack-"
 
@@ -54,11 +58,47 @@ def remote_has(path, branch):
     return bool(out.strip())
 
 
+def has_open_pr(repo, branch):
+    """이 브랜치로 열린 PR 이 있는가. 있으면 살아 있는 작업이다(회수 금지)."""
+    p = run(["gh", "pr", "list", "--repo", repo, "--head", branch,
+             "--state", "all", "--json", "number"], check=False)
+    if p.returncode != 0:
+        # 판단할 수 없으면 **살아 있다고 본다** — 남의 작업을 뺏는 쪽이 더 비싸다.
+        raise RuntimeError(f"PR 조회 실패(회수 판단 불가): {p.stderr.strip()}")
+    return p.stdout.strip() not in ("", "[]")
+
+
+def branch_age_minutes(path, branch):
+    """원격 브랜치 tip 의 커밋 시각으로부터 흐른 분. 락을 건 시점의 근사치다."""
+    run(["git", "fetch", "origin", f"{branch}:refs/remotes/origin/{branch}"],
+        cwd=path, check=False)
+    out = run(["git", "log", "-1", "--format=%ct", f"origin/{branch}"], cwd=path).stdout.strip()
+    return (time.time() - int(out)) / 60
+
+
+def is_stale(repo, path, branch, stale_minutes):
+    """PR 이 하나도 없고 브랜치가 충분히 오래됐으면 죽은 락이다.
+
+    상한(자기 수정 60분)보다 넉넉히 잡아야 **살아 있는 작업을 뺏지 않는다**. PR 이 하나라도
+    있으면(열렸든 닫혔든) 그 실행은 최소한 PR 을 여는 데까지 갔다는 뜻이라 회수하지 않는다.
+    """
+    if has_open_pr(repo, branch):
+        return False
+    return branch_age_minutes(path, branch) >= stale_minutes
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--repo", required=True, help="owner/name")
     ap.add_argument("--ts", required=True, help="노드 ts — 브랜치 이름의 근거")
     ap.add_argument("--base", default="main")
+    ap.add_argument(
+        "--stale-minutes",
+        type=int,
+        default=120,
+        help="PR 없는 브랜치를 죽은 락으로 보는 경과 시간(기본 120분). "
+             "자기 수정 상한 60분보다 넉넉해야 살아 있는 작업을 뺏지 않는다.",
+    )
     ap.add_argument("--work-dir", default=os.path.expanduser("~/work"))
     ap.add_argument(
         "--reuse",
@@ -77,15 +117,23 @@ def main():
             return 0
 
         branch = branch_name(args.ts)
+        mode = "created"
         if remote_has(path, branch):
-            # 이미 누가 잡았다. 재실행이 아니라 경쟁이면 여기서 물러나는 것이 맞다 —
-            # 이어서 하려면 --reuse 로 명시해야 한다(의도가 드러나야 한다).
-            print(f"이미 잡힌 노드다: {branch}", file=sys.stderr)
-            return 1
+            # 이미 누가 잡았다. 살아 있는 작업이면 물러나고(이어서 하려면 --reuse 로 의도를
+            # 드러낸다), 죽은 락이면 회수한다.
+            if not is_stale(args.repo, path, branch, args.stale_minutes):
+                print(f"이미 잡힌 노드다(살아 있음): {branch}", file=sys.stderr)
+                return 1
+            age = int(branch_age_minutes(path, branch))
+            print(f"죽은 락 회수: {branch} (PR 없음 · {age}분 경과)", file=sys.stderr)
+            run(["git", "push", "origin", "--delete", branch], cwd=path)
+            mode = "reclaimed"
 
         run(["git", "checkout", args.base], cwd=path)
         run(["git", "pull", "--ff-only", "origin", args.base], cwd=path)
-        run(["git", "checkout", "-b", branch], cwd=path)
+        # -B 로 만든다: 회수했거나 이전 실행이 남긴 **로컬** 브랜치가 있어도 base 로 리셋된다.
+        # -b 면 그 경우 "already exists" 로 죽는데, 원격은 비었으므로 잡을 수 있는 락이다.
+        run(["git", "checkout", "-B", branch], cwd=path)
         # **빈 브랜치를 먼저 민다** — 작업을 시작하기 전에 락을 잡아야 경쟁이 막힌다.
         push = run(["git", "push", "-u", "origin", branch], cwd=path, check=False)
         if push.returncode != 0:
@@ -96,7 +144,7 @@ def main():
         print(f"락 실패: {e}", file=sys.stderr)
         return 2
 
-    json.dump({"branch": branch, "mode": "created", "path": path}, sys.stdout)
+    json.dump({"branch": branch, "mode": mode, "path": path}, sys.stdout)
     print()
     return 0
 

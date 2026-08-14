@@ -17,6 +17,33 @@ import slack_api as slack  # noqa: E402
 
 CH = "C_TEST"
 
+# 검출은 이제 신선도를 보므로 시계를 고정한다. 픽스처의 ts 는 이 값 기준의 초 오프셋이다.
+NOW = 1_800_000_000.0
+
+
+class FakeClock:
+    def __init__(self, now):
+        self.now = now
+
+    def time(self):
+        return self.now
+
+
+def t(seconds_ago=0):
+    """NOW 기준 ts 문자열."""
+    return f"{NOW - seconds_ago:.6f}"
+
+
+class ClockFixed(unittest.TestCase):
+    """detect 의 시계를 고정한다 — 실제 시각에 따라 결과가 달라지면 테스트가 아니다."""
+
+    def setUp(self):
+        self._time = detect.time
+        detect.time = FakeClock(NOW)
+
+    def tearDown(self):
+        detect.time = self._time
+
 
 def msg(ts, text, reactions=(), **extra):
     m = {"ts": ts, "text": text, "user": "U1",
@@ -37,51 +64,51 @@ class Fake:
         slack.replies = lambda channel, thread_ts, limit=200: self.thread_map.get(thread_ts, [])
 
 
-class DetectRules(unittest.TestCase):
+class DetectRules(ClockFixed):
 
     def test_트리거만_있는_메시지가_잡힌다(self):
-        Fake([msg("100.1", "고쳐줘", [emoji.TRIGGER])]).install()
+        Fake([msg(t(90), "고쳐줘", [emoji.TRIGGER])]).install()
         nodes = detect.detect(CH, 7)
-        self.assertEqual([n["ts"] for n in nodes], ["100.1"])
+        self.assertEqual([n["ts"] for n in nodes], [t(90)])
         self.assertEqual(nodes[0]["kind"], "message")
 
     def test_클레임된_메시지는_제외된다(self):
-        Fake([msg("100.1", "고쳐줘", [emoji.TRIGGER, emoji.CLAIM])]).install()
+        Fake([msg(t(90), "고쳐줘", [emoji.TRIGGER, emoji.CLAIM])]).install()
         self.assertEqual(detect.detect(CH, 7), [])
 
     def test_트리거_없으면_잡히지_않는다(self):
-        Fake([msg("100.1", "그냥 메모", []),
-              msg("100.2", "질문", [emoji.NEEDS_DECISION])]).install()
+        Fake([msg(t(90), "그냥 메모", []),
+              msg(t(80), "질문", [emoji.NEEDS_DECISION])]).install()
         self.assertEqual(detect.detect(CH, 7), [])
 
     def test_스레드_답글도_같은_규칙으로_잡힌다(self):
         """D-006 — ❓ 로 보류된 항목에 사람이 결정을 답글로 적고 ▶️ 를 다는 경로."""
-        parent = msg("100.1", "QA 목록", [emoji.NEEDS_DECISION], reply_count=2)
-        Fake([parent], {"100.1": [
+        parent = msg(t(90), "QA 목록", [emoji.NEEDS_DECISION], reply_count=2)
+        Fake([parent], {t(90): [
             parent,
-            msg("100.2", "봇: 판단 지점 A/B", []),
-            msg("100.3", "A 로 가자", [emoji.TRIGGER]),
+            msg(t(80), "봇: 판단 지점 A/B", []),
+            msg(t(70), "A 로 가자", [emoji.TRIGGER]),
         ]}).install()
         nodes = detect.detect(CH, 7)
-        self.assertEqual([n["ts"] for n in nodes], ["100.3"])
+        self.assertEqual([n["ts"] for n in nodes], [t(70)])
         self.assertEqual(nodes[0]["kind"], "reply")
-        self.assertEqual(nodes[0]["parent_ts"], "100.1")
+        self.assertEqual(nodes[0]["parent_ts"], t(90))
 
     def test_부모와_답글이_동시에_잡힐_수_있다(self):
-        parent = msg("100.1", "QA 목록", [emoji.TRIGGER], reply_count=1)
-        Fake([parent], {"100.1": [parent, msg("100.5", "추가 지시", [emoji.TRIGGER])]}).install()
-        self.assertEqual([n["ts"] for n in detect.detect(CH, 7)], ["100.1", "100.5"])
+        parent = msg(t(90), "QA 목록", [emoji.TRIGGER], reply_count=1)
+        Fake([parent], {t(90): [parent, msg(t(60), "추가 지시", [emoji.TRIGGER])]}).install()
+        self.assertEqual([n["ts"] for n in detect.detect(CH, 7)], [t(90), t(60)])
 
     def test_오래된_것부터_정렬된다(self):
         """같은 스레드의 지시 순서가 뒤집히면 나중 결정이 먼저 반영된다."""
-        Fake([msg("300.0", "세번째", [emoji.TRIGGER]),
-              msg("100.0", "첫번째", [emoji.TRIGGER]),
-              msg("200.0", "두번째", [emoji.TRIGGER])]).install()
+        Fake([msg(t(100), "세번째", [emoji.TRIGGER]),
+              msg(t(300), "첫번째", [emoji.TRIGGER]),
+              msg(t(200), "두번째", [emoji.TRIGGER])]).install()
         self.assertEqual([n["ts"] for n in detect.detect(CH, 7)],
-                         ["100.0", "200.0", "300.0"])
+                         [t(300), t(200), t(100)])
 
     def test_입퇴장_시스템메시지는_무시된다(self):
-        Fake([msg("100.1", "님이 채널에 참여함", [emoji.TRIGGER], subtype="channel_join")]).install()
+        Fake([msg(t(90), "님이 채널에 참여함", [emoji.TRIGGER], subtype="channel_join")]).install()
         self.assertEqual(detect.detect(CH, 7), [])
 
 
@@ -103,33 +130,70 @@ class EmojiGuard(unittest.TestCase):
             emoji.assert_bot_may_add("eyes")
 
 
-class MergeMode(unittest.TestCase):
+class MergeMode(ClockFixed):
     """5단계 검출 — 🚀 있고 ✅ 없는 것(보통 PR 링크가 담긴 봇 답글)."""
 
     def test_병합_대기_노드가_잡힌다(self):
-        parent = msg("100.1", "QA 목록", [emoji.TRIGGER, emoji.CLAIM], reply_count=1)
-        Fake([parent], {"100.1": [
+        parent = msg(t(90), "QA 목록", [emoji.TRIGGER, emoji.CLAIM], reply_count=1)
+        Fake([parent], {t(90): [
             parent,
-            msg("100.9", "PR 열었어요 https://github.com/o/r/pull/7",
+            msg(t(50), "PR 열었어요 https://github.com/o/r/pull/7",
                 [emoji.PR_OPEN, emoji.MERGE]),
         ]}).install()
         nodes = detect.detect(CH, 7, mode="merge")
-        self.assertEqual([n["ts"] for n in nodes], ["100.9"])
+        self.assertEqual([n["ts"] for n in nodes], [t(50)])
 
     def test_이미_병합된_것은_잡히지_않는다(self):
-        parent = msg("100.1", "QA", [emoji.CLAIM], reply_count=1)
-        Fake([parent], {"100.1": [
+        parent = msg(t(90), "QA", [emoji.CLAIM], reply_count=1)
+        Fake([parent], {t(90): [
             parent,
-            msg("100.9", "PR", [emoji.PR_OPEN, emoji.MERGE, emoji.DONE]),
+            msg(t(50), "PR", [emoji.PR_OPEN, emoji.MERGE, emoji.DONE]),
         ]}).install()
         self.assertEqual(detect.detect(CH, 7, mode="merge"), [])
 
     def test_모드가_서로를_침범하지_않는다(self):
         """▶️ 노드가 병합 검출에 섞이면 코드가 안 된 것을 병합하려 든다."""
-        Fake([msg("100.1", "새 지시", [emoji.TRIGGER]),
-              msg("100.2", "PR", [emoji.MERGE])]).install()
-        self.assertEqual([n["ts"] for n in detect.detect(CH, 7, mode="triage")], ["100.1"])
-        self.assertEqual([n["ts"] for n in detect.detect(CH, 7, mode="merge")], ["100.2"])
+        Fake([msg(t(90), "새 지시", [emoji.TRIGGER]),
+              msg(t(80), "PR", [emoji.MERGE])]).install()
+        self.assertEqual([n["ts"] for n in detect.detect(CH, 7, mode="triage")], [t(90)])
+        self.assertEqual([n["ts"] for n in detect.detect(CH, 7, mode="merge")], [t(80)])
+
+
+class Freshness(ClockFixed):
+    """신선도는 **노드 자신** 기준이다 — 부모 나이로 판정하면 재투입 루프가 끊긴다."""
+
+    def ts(self, days_ago):
+        return t(days_ago * 86400)
+
+    def test_오래된_스레드의_오늘_답글이_잡힌다(self):
+        """실제로 겪을 경로 — 열흘 전 ❓ 에 오늘 결정을 답글로 달고 ▶️."""
+        old, fresh = self.ts(10), self.ts(0)
+        parent = msg(old, "옛 QA", [emoji.NEEDS_DECISION],
+                     reply_count=1, latest_reply=fresh)
+        Fake([parent], {old: [parent, msg(fresh, "A 로 가자", [emoji.TRIGGER])]}).install()
+        nodes = detect.detect(CH, 7)
+        self.assertEqual([n["ts"] for n in nodes], [fresh])
+        self.assertEqual(nodes[0]["parent_ts"], old)
+
+    def test_오래된_노드는_잡히지_않는다(self):
+        old = self.ts(10)
+        Fake([msg(old, "옛 지시", [emoji.TRIGGER])]).install()
+        self.assertEqual(detect.detect(CH, 7), [])
+
+    def test_최근_답글이_없는_스레드는_열지_않는다(self):
+        """훑는 범위를 넓힌 대가를 여기서 돌려받는다(불필요한 replies 호출 회피)."""
+        old = self.ts(10)
+        opened = []
+
+        parent = msg(old, "옛 QA", [], reply_count=1, latest_reply=old)
+        f = Fake([parent], {old: [parent, msg(old, "옛 답글", [emoji.TRIGGER])]})
+        f.install()
+        real = slack.replies
+        slack.replies = lambda channel, thread_ts, limit=200: (
+            opened.append(thread_ts) or real(channel, thread_ts, limit))
+
+        self.assertEqual(detect.detect(CH, 7), [])
+        self.assertEqual(opened, [])
 
 
 if __name__ == "__main__":

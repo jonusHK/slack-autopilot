@@ -95,13 +95,15 @@ push → CI 실패 → gh run view --log-failed → 원인 수정 → push → (
 
 ## 8. 엔진 설정
 
-```yaml
-# config.yaml — **값이 아니라 환경변수 이름만** 담는다(식별자도 커밋하지 않는다).
-projects:
-  - channel_env: "SLACK_CHANNEL_ID_SAI"   # 값은 .env / 루틴 시크릿
-    repo_env: "TARGET_REPO_SAI"           # AUTOMATION.md 가 있어야 처리한다
-concurrency: 3
-detect_window_days: 7
+`config.json` — **값이 아니라 환경변수 이름만** 담는다(식별자도 커밋하지 않는다).
+YAML 이 아닌 이유는 표준 라이브러리에 파서가 없어서다(외부 의존 금지 — CLAUDE.md).
+
+```json
+{"projects": [{"name": "sai",
+               "channel_env": "SLACK_CHANNEL_ID_SAI",
+               "repo_env": "TARGET_REPO_SAI"}],
+ "concurrency": 3, "detect_window_days": 7,
+ "self_fix": {"max_attempts": 5, "max_minutes": 60}}
 ```
 
 - 기동 시 필수 변수(`SLACK_BOT_TOKEN` + 각 프로젝트의 `*_env`)가 비어 있으면 **즉시 중단**한다

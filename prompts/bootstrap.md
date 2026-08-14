@@ -18,7 +18,7 @@
 slack-autopilot 엔진의 분류 루틴이다. 명세는 레포 안에 있고, 이 프롬프트는 그것을 가져오기만 한다.
 
 1) 엔진을 **매번 새로** 받는다. 남은 디렉터리를 재사용하지 않는다:
-   rm -rf ~/slack-autopilot && git clone --depth 1 https://github.com/jonusHK/slack-autopilot.git ~/slack-autopilot
+   rm -rf ~/slack-autopilot && gh repo clone jonusHK/slack-autopilot ~/slack-autopilot -- --depth 1
    그다음 cd ~/slack-autopilot
 
 2) 성공했으면 prompts/triage.md 를 읽고 그 파일의 절차를 그대로 수행한다. 그 파일이 명세이고 이 프롬프트보다 우선한다.
@@ -26,6 +26,21 @@ slack-autopilot 엔진의 분류 루틴이다. 명세는 레포 안에 있고, �
 3) 실패했으면 명세를 읽을 수 없다. **침묵하지 말고** 채널에 알린 뒤 종료한다 — 슬랙 chat.postMessage 를 curl 로 직접 부르고(레포에 의존하지 않는 유일한 경로), 메시지에 **git 이 낸 에러의 첫 줄을 그대로 포함**한다. 추측으로 원인을 적지 않는다.
    채널은 $SLACK_CHANNEL_ID_SAI, 토큰은 $SLACK_BOT_TOKEN. 토큰 값 자체는 메시지에 넣지 않는다.
 ```
+
+## 왜 `git clone` 이 아니라 `gh repo clone` 인가
+
+**VM 안에는 실제 GitHub 자격이 없다.** GitHub 접근은 프록시가 자격을 갈아 끼워 처리하는데,
+그 경로를 타는 것은 `gh` 이고 맨 `git clone https://github.com/...` 은 아니다. 프라이빗
+레포에 그걸 쓰면 이렇게 죽는다:
+
+```
+fatal: could not read Username for 'https://github.com': terminal prompts disabled
+```
+
+2026-08-14 에 이 한 줄을 못 봐서 여러 라운드를 태웠다 — 증상이 "아무 일도 안 일어남"이었고,
+그동안 원인을 네트워크와 환경 캐싱으로 **두 번 잘못 짚었다**. 실패 메시지에 git 에러 원문을
+싣도록 고치자 한 번에 갈렸다. `lock.py` 가 대상 레포에 이미 `gh repo clone` 을 쓰고 있었으므로
+그쪽은 멀쩡했다.
 
 ## 왜 매번 새로 받나
 

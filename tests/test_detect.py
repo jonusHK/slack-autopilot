@@ -103,5 +103,34 @@ class EmojiGuard(unittest.TestCase):
             emoji.assert_bot_may_add("eyes")
 
 
+class MergeMode(unittest.TestCase):
+    """5단계 검출 — 🚀 있고 ✅ 없는 것(보통 PR 링크가 담긴 봇 답글)."""
+
+    def test_병합_대기_노드가_잡힌다(self):
+        parent = msg("100.1", "QA 목록", [emoji.TRIGGER, emoji.CLAIM], reply_count=1)
+        Fake([parent], {"100.1": [
+            parent,
+            msg("100.9", "PR 열었어요 https://github.com/o/r/pull/7",
+                [emoji.PR_OPEN, emoji.MERGE]),
+        ]}).install()
+        nodes = detect.detect(CH, 7, mode="merge")
+        self.assertEqual([n["ts"] for n in nodes], ["100.9"])
+
+    def test_이미_병합된_것은_잡히지_않는다(self):
+        parent = msg("100.1", "QA", [emoji.CLAIM], reply_count=1)
+        Fake([parent], {"100.1": [
+            parent,
+            msg("100.9", "PR", [emoji.PR_OPEN, emoji.MERGE, emoji.DONE]),
+        ]}).install()
+        self.assertEqual(detect.detect(CH, 7, mode="merge"), [])
+
+    def test_모드가_서로를_침범하지_않는다(self):
+        """▶️ 노드가 병합 검출에 섞이면 코드가 안 된 것을 병합하려 든다."""
+        Fake([msg("100.1", "새 지시", [emoji.TRIGGER]),
+              msg("100.2", "PR", [emoji.MERGE])]).install()
+        self.assertEqual([n["ts"] for n in detect.detect(CH, 7, mode="triage")], ["100.1"])
+        self.assertEqual([n["ts"] for n in detect.detect(CH, 7, mode="merge")], ["100.2"])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

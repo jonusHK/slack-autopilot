@@ -12,15 +12,43 @@
 | GitHub | 대상 레포 push·PR 권한(클라우드 에이전트의 GitHub 연동 + `gh`) |
 | 클라우드 루틴 | Claude Code `/schedule` — 매시(정각 회피 분) |
 
-## 1. Slack 봇 앱 생성 (1회, 사람)
+## 1. Slack 봇 앱 생성 (1회)
 
-1. https://api.slack.com/apps → **Create New App** → From scratch → 워크스페이스 선택.
-2. **OAuth & Permissions → Bot Token Scopes** 4개:
-   `channels:history` · `reactions:read` · `reactions:write` · `chat:write`.
-   (비공개 채널을 쓰려면 `groups:history` 추가.)
-3. **Install to Workspace** → Bot User OAuth Token(`xoxb-…`) 발급.
-4. 대상 채널에서 `/invite @<봇이름>` — 초대 안 된 채널은 history 를 못 읽는다.
-5. 토큰을 루틴 시크릿에 등록. **터미널에 값을 출력하지 않는다.**
+1. https://api.slack.com/apps → **Create New App** → **From a manifest** 가 가장 빠르다
+   (스코프까지 한 번에). 매니페스트(JSON):
+   ```json
+   {"display_information":{"name":"slack-autopilot"},
+    "features":{"bot_user":{"display_name":"slack-autopilot","always_online":false}},
+    "oauth_config":{"scopes":{"bot":["channels:history","reactions:read","reactions:write","chat:write"]}},
+    "settings":{"org_deploy_enabled":false,"socket_mode_enabled":false,"is_hosted":false,"token_rotation_enabled":false}}
+   ```
+   비공개 채널을 쓰려면 `groups:history` 를 더한다.
+2. **Create and Install** → OAuth 승인(허용). 생성 직후 "스코프가 바뀌었으니 재설치하라"는
+   배너가 뜨면 그 링크로 한 번 더 설치해야 스코프가 실제로 붙는다.
+3. **Install App** 화면의 Bot User OAuth Token(`xoxb-…`)을 **복사 버튼**으로 클립보드에.
+4. 대상 채널에 앱 추가(§1.5) — 안 하면 history 가 `not_in_channel`.
+5. 토큰 저장은 §1.6 — **터미널에 값을 출력하지 않는다.**
+
+### 1.5 채널에 앱 추가 — `/invite` 로는 안 된다 (함정)
+
+채널 입력창에 `/invite @<봇>` 을 치면 자동완성에 봇이 뜨지만 **사람 초대 경로라 반영되지
+않는다**(조용히 아무 일도 안 일어난다). `/invite ` 까지만 치면 나오는 메뉴에서
+**"이 채널에 에이전트 및 앱 추가"** 를 고르고, 목록에서 봇의 **[추가]** 를 눌러야 한다.
+확인은 §2 의 `conversations.history` 가 `ok:true` 가 되는 것.
+
+### 1.6 토큰을 값 노출 없이 저장
+
+복사 버튼을 누른 직후(클립보드에 토큰이 있는 상태):
+
+```bash
+cd <레포> && TOK=$(pbpaste) && case "$TOK" in
+  xoxb-*) printf 'SLACK_BOT_TOKEN=%s\n' "$TOK" > .env && chmod 600 .env
+          && echo "저장됨: 길이 ${#TOK}자";;
+  *) echo "클립보드가 봇 토큰 형식이 아님(저장 안 함)";;
+esac
+```
+
+토큰이 클립보드 → 파일로만 이동해 **터미널·기록 어디에도 값이 남지 않는다.**
 
 ## 2. 동작 확인 (스모크)
 
@@ -31,12 +59,26 @@ curl -s -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
 # reactions.add / chat.postMessage 도 각 1회 — 테스트 메시지에.
 ```
 
-`ok:false` 면 `error` 필드 확인 — `not_in_channel`(§1-4 누락)·`missing_scope`(§1-2 누락)이
+`ok:false` 면 `error` 필드 확인 — `not_in_channel`(§1.5 누락)·`missing_scope`(§1-1 누락)이
 단골이다.
+
+부여된 스코프는 **부수효과 없이** 헤더로 확인한다(메시지·리액션을 남기지 않는다):
+
+```bash
+curl -s -D - -o /dev/null -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
+  https://slack.com/api/auth.test | grep -i '^x-oauth-scopes'
+```
+
+**채널 ID 를 얻으려고 `conversations.list` 를 쓰지 않는다** — `channels:read` 가 추가로
+필요해진다. 채널 ID 는 슬랙 UI(채널 상세 하단) 또는 메시지 링크에서 읽어 환경변수로 넣는다.
+엔진은 ID 를 설정으로 받으므로 이 스코프가 영구히 불필요하다(최소 권한).
 
 ## 3. 착수 순서 (단계 도입 — 한 번에 켜지 않는다)
 
-1. **봇 앱 + 토큰**(§1) — 이게 없으면 나머지가 전부 막힌다.
+1. ~~**봇 앱 + 토큰**(§1)~~ ✅ **완료(2026-08-14)** — 앱 생성·설치, 스코프 4종 부여 확인,
+   #sai 채널 추가, `.env` 에 토큰·채널 ID·대상 레포 등록. `conversations.history` 응답 확인됨.
+   **아직 안 한 것**: `chat:write`·`reactions:write` 의 실제 쓰기 스모크(채널에 흔적이 남으므로
+   3단계 첫 루틴 실행에서 겸한다).
 2. **엔진 스크립트 + 첫 소비자 정책 파일** — 이 레포에 검출·클레임 스크립트와 루틴
    프롬프트, 대상 레포에 `AUTOMATION.md`(계약: `../design/policy-contract.md`).
 3. **검출·클레임만 하는 루틴**(구현 없음) — ▶️ 를 집어 💬 + "무엇을 하려는지 + 티어 분류

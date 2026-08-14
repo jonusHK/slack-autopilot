@@ -17,11 +17,27 @@
 ```
 slack-autopilot 엔진의 분류 루틴이다. 명세는 레포 안에 있고, 이 프롬프트는 그것을 가져오기만 한다.
 
-git clone --depth 1 https://github.com/jonusHK/slack-autopilot.git ~/slack-autopilot 2>/dev/null || git -C ~/slack-autopilot pull -q --ff-only
-cd ~/slack-autopilot
+1) 엔진을 **매번 새로** 받는다. 남은 디렉터리를 재사용하지 않는다:
+   rm -rf ~/slack-autopilot && git clone --depth 1 https://github.com/jonusHK/slack-autopilot.git ~/slack-autopilot
+   그다음 cd ~/slack-autopilot
 
-성공했으면 prompts/triage.md 를 읽고 그 파일의 절차를 그대로 수행한다. 그 파일이 명세이고 이 프롬프트보다 우선한다.
+2) 성공했으면 prompts/triage.md 를 읽고 그 파일의 절차를 그대로 수행한다. 그 파일이 명세이고 이 프롬프트보다 우선한다.
 
-레포를 못 가져왔으면 명세도 못 읽는다. 그때는 **침묵하지 말고** 아래로 알린 뒤 종료한다(레포에 의존하지 않는 유일한 경로다):
-curl -s -X POST -H "Authorization: Bearer $SLACK_BOT_TOKEN" -H "Content-type: application/json; charset=utf-8" -d "{\"channel\":\"$SLACK_CHANNEL_ID_SAI\",\"text\":\":warning: 루틴이 엔진 레포를 가져오지 못했어요 (클론·풀 실패)\"}" https://slack.com/api/chat.postMessage
+3) 실패했으면 명세를 읽을 수 없다. **침묵하지 말고** 채널에 알린 뒤 종료한다 — 슬랙 chat.postMessage 를 curl 로 직접 부르고(레포에 의존하지 않는 유일한 경로), 메시지에 **git 이 낸 에러의 첫 줄을 그대로 포함**한다. 추측으로 원인을 적지 않는다.
+   채널은 $SLACK_CHANNEL_ID_SAI, 토큰은 $SLACK_BOT_TOKEN. 토큰 값 자체는 메시지에 넣지 않는다.
 ```
+
+## 왜 매번 새로 받나
+
+클라우드 환경에는 **캐싱**이 있어 이전 세션의 `~/slack-autopilot` 이 남아 있을 수 있다.
+그러면 `git clone` 이 "이미 있음"으로 실패하고, 대안으로 두었던 `git pull --ff-only` 는
+**`--depth 1` 얕은 클론에서 깨진다.** 실제로 이 경로에서 루틴이 여러 번 조용히 죽었다
+(2026-08-14). 첫 실행만 성공하고 그 뒤로 전부 무반응이었던 것이 이 때문이다.
+
+`rm -rf` 후 새로 받으면 그 상태가 아예 없어진다 — 이 엔진의 다른 곳과 같은 원칙이다
+(**상태를 기억에 두지 않는다**, D-003 ④). 레포가 작아 매번 받는 비용은 무시할 만하다.
+
+## 실패 메시지에 에러 원문을 넣는 이유
+
+"가져오지 못했어요"만으로는 다음 사람이 또 추측한다 — 오늘 그 추측으로 여러 라운드를 썼다.
+`git` 이 낸 첫 줄이 있으면 권한 문제인지, 디렉터리 잔재인지, 네트워크인지가 바로 갈린다.

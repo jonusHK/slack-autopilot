@@ -104,7 +104,22 @@ curl -s -D - -o /dev/null -H "Authorization: Bearer $SLACK_BOT_TOKEN" \
 Environments → 해당 환경**에 `SLACK_BOT_TOKEN`·`SLACK_CHANNEL_ID_SAI`·`TARGET_REPO_SAI` 를
 등록해야 한다. 없으면 루틴은 아무것도 하지 않고 "환경변수 누락"만 남기고 끝난다(설계대로).
 
-**④ MCP 커넥터는 환경 기본값이 강제로 붙는다.** `mcp_connections: []` 로 지워도 되돌아온다.
+**④ 기본 네트워크(Trusted)는 `slack.com` 을 막는다.** 이게 가장 오해하기 쉬운 함정이다 —
+증상이 **"아무 일도 일어나지 않음"** 이라 토큰이나 스코프 문제로 착각하기 딱 좋다(2026-08-14
+실제로 그렇게 한 번 헤맸다). Trusted 허용 목록은 Anthropic 서비스·GitHub 계열·컨테이너
+레지스트리·클라우드 플랫폼·패키지 매니저뿐이고 **슬랙은 없다**.
+
+조치 — 환경 설정에서 **Network access 를 Custom** 으로 바꾸고 **Allowed domains** 에:
+
+```
+slack.com
+```
+
+그리고 **"Also include default list of common package managers" 를 반드시 체크한다.**
+빠뜨리면 적은 것만 열려서 GitHub·패키지 레지스트리가 막히고 엔진 클론부터 실패한다.
+(GitHub 트래픽은 별도 프록시라 이 목록과 무관하게 동작하지만, 다른 준비 단계가 걸린다.)
+
+**⑤ MCP 커넥터는 환경 기본값이 강제로 붙는다.** `mcp_connections: []` 로 지워도 되돌아온다.
 대신 `allowed_tools` 에 `mcp__*` 를 넣지 않으면 도구가 노출되지 않아 입력 토큰이 절약된다 —
 이 엔진은 슬랙을 python 으로 직접 부르므로 커넥터가 필요 없다.
 

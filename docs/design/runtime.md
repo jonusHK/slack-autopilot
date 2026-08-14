@@ -194,7 +194,7 @@ python3 bin/lock.py --repo owner/name --ts <ts> --reuse <브랜치>  # 미병합
 | `not_in_channel` | 봇이 채널에 없다 | `/invite` 가 아니라 **"이 채널에 에이전트 및 앱 추가"**(setup.md §1.5) |
 | `missing_scope` | 스코프 부족 | 필요한 것만 추가하고 재설치. `conversations.list` 를 쓰려다 `channels:read` 를 늘리지 말 것 |
 | "환경변수 누락" | 전용 환경에 값이 없거나 트리거가 다른 환경을 가리킴 | 트리거의 `environment_id` 확인 |
-| 슬랙 호출이 네트워크에서 막힘 | 환경의 접근 수준이 `slack.com` 을 안 열어줌 | 접근 수준 조정 |
+| **아무 일도 안 일어남**(이모지·답글 무변화) | **기본 Trusted 네트워크가 `slack.com` 을 막는다** — 허용 목록에 슬랙이 없다 | Network access 를 **Custom** 으로, `slack.com` 추가 + "기본 패키지 매니저 목록도 포함" 체크(setup.md §3.5 ④) |
 | 같은 노드가 두 번 처리됨 | 클레임 전에 작업을 시작했다 | 순서는 **클레임 → 작업**. 4단계에서는 브랜치 push 가 먼저 |
 | 봇이 자기 답글을 다시 집음 | ▶️ 를 봇이 붙였다는 뜻 — 있을 수 없다 | `emoji.assert_bot_may_add` 가 막는다. 뚫렸으면 그게 사고다 |
 

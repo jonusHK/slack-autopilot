@@ -22,7 +22,7 @@
 
 ## 2. 작업 노드 — ▶️ 달린 메시지 **또는 스레드 답글**
 
-검출 대상: **최근 7일 · ▶️ 있고 💬 없음.** 부모 메시지와 스레드 답글을 구분하지 않는다(D-006).
+검출 대상: **최근 14일 · ▶️ 있고 💬 없음.** 부모 메시지와 스레드 답글을 구분하지 않는다(D-006).
 
 ```
 봇: ❓ + "판단 지점 A/B" 답글
@@ -104,7 +104,7 @@ YAML 이 아닌 이유는 표준 라이브러리에 파서가 없어서다(외�
 {"projects": [{"name": "sai",
                "channel_env": "SLACK_CHANNEL_ID_SAI",
                "repo_env": "TARGET_REPO_SAI"}],
- "concurrency": 3, "detect_window_days": 7,
+ "concurrency": 3, "detect_window_days": 14,
  "self_fix": {"max_attempts": 5, "max_minutes": 60}}
 ```
 

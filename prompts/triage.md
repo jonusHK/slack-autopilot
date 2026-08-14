@@ -12,7 +12,7 @@ cd ~/slack-autopilot
 # .env 는 **로컬 실행용**이다. VM 에는 없다(gitignore) — 있을 때만 읽는다.
 # `. ./.env` 를 && 체인에 두면 VM 에서 여기서 끊겨 뒤가 통째로 안 돈다(실제로 겪었다).
 [ -f .env ] && { set -a; . ./.env; set +a; }
-python3 bin/detect.py --channel "$SLACK_CHANNEL_ID_SAI" --days 7
+python3 bin/detect.py --channel "$SLACK_CHANNEL_ID_SAI" --days 14
 ```
 
 **결과가 `[]` 이면 아무것도 하지 말고 즉시 종료한다.** 요약도 보고도 남기지 않는다 —

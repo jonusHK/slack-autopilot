@@ -88,16 +88,22 @@ scripts/
 ## 4. 검출 — `detect.py`
 
 ```
-python3 bin/detect.py --channel "$SLACK_CHANNEL_ID_SAI" --days 7
+python3 bin/detect.py --channel "$SLACK_CHANNEL_ID_SAI" --days 14
 ```
 
-1. `conversations.history(oldest = now - days)` 로 최근 창을 읽는다.
+1. `conversations.history(oldest = now - days)` 로 창을 읽는다(**기본 14일, 스캔·판정 공용**).
 2. 각 메시지에서 `channel_join`·`channel_leave` 를 버린다(입퇴장에 이모지가 붙는 사고 방지).
 3. **▶️ 있고 💬 없으면** 노드로 잡는다.
 4. 스레드가 있으면(`thread_ts` 또는 `reply_count`) `conversations.replies` 로 답글도 **같은
    규칙으로** 본다 — 부모와 답글을 구분하지 않는다(D-006). 부모는 3번에서 이미 봤으므로 건너뛴다.
 5. **오래된 것부터 정렬**해 낸다. 같은 스레드에서 지시 순서가 뒤집히면 나중 결정이 먼저 반영된다.
 6. 결과가 없으면 `[]` — 호출부는 이것을 보고 즉시 종료해야 한다.
+
+**창은 하나다.** 한때 스캔 범위와 판정 기준을 갈랐는데(부모는 멀리, 노드는 최근),
+"**오래된 메시지 자체에 오늘 ▶️ 를 달면 안 잡힌다**"는 사각지대가 생겼고 증상이 침묵이라
+보이지도 않았다. 슬랙 API 는 **이모지를 언제 달았는지 알려주지 않으므로** 메시지 나이로
+근사할 수밖에 없는데, 그렇다면 근사가 틀리는 쪽을 줄이는 편이 낫다. 중복 처리는 신선도가
+아니라 💬 클레임이 막는다 — 신선도의 일은 API 호출량 한정뿐이다.
 
 출력 노드에는 `kind`(message|reply) · `ts` · `parent_ts` · `text` · `reactions` 가 들어간다.
 `kind == "reply"` 면 소비자는 **부모 + 스레드 전문**을 컨텍스트로 읽어야 한다("그 항목"이

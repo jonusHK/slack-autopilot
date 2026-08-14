@@ -8,7 +8,7 @@
 cd ~/slack-autopilot
 # .env 는 로컬 실행용 — VM 에는 없다. 있을 때만 읽는다.
 [ -f .env ] && { set -a; . ./.env; set +a; }
-python3 bin/detect.py --channel "$SLACK_CHANNEL_ID_SAI" --mode merge --days 7
+python3 bin/detect.py --channel "$SLACK_CHANNEL_ID_SAI" --mode merge --days 14
 ```
 
 `[]` 이면 **아무 보고도 남기지 말고 즉시 종료**한다.

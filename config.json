@@ -8,6 +8,6 @@
     }
   ],
   "concurrency": 3,
-  "detect_window_days": 7,
+  "detect_window_days": 14,
   "self_fix": { "max_attempts": 5, "max_minutes": 60 }
 }

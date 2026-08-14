@@ -165,24 +165,29 @@ class Freshness(ClockFixed):
     def ts(self, days_ago):
         return t(days_ago * 86400)
 
-    def test_오래된_스레드의_오늘_답글이_잡힌다(self):
-        """실제로 겪을 경로 — 열흘 전 ❓ 에 오늘 결정을 답글로 달고 ▶️."""
-        old, fresh = self.ts(10), self.ts(0)
+    def test_창_밖_스레드의_오늘_답글이_잡힌다(self):
+        """부모가 창 밖이어도 **답글 자신이 창 안**이면 잡힌다(재투입 루프의 생명선)."""
+        old, fresh = self.ts(30), self.ts(0)
         parent = msg(old, "옛 QA", [emoji.NEEDS_DECISION],
                      reply_count=1, latest_reply=fresh)
         Fake([parent], {old: [parent, msg(fresh, "A 로 가자", [emoji.TRIGGER])]}).install()
-        nodes = detect.detect(CH, 7)
+        nodes = detect.detect(CH, 14)
         self.assertEqual([n["ts"] for n in nodes], [fresh])
         self.assertEqual(nodes[0]["parent_ts"], old)
 
-    def test_오래된_노드는_잡히지_않는다(self):
-        old = self.ts(10)
-        Fake([msg(old, "옛 지시", [emoji.TRIGGER])]).install()
-        self.assertEqual(detect.detect(CH, 7), [])
+    def test_창_안이면_오래된_메시지에_지금_달아도_잡힌다(self):
+        """창을 가르던 시절의 사각지대 — 열흘 전 메시지에 오늘 ▶️ 를 달면 조용히 누락됐다.
+        이모지를 언제 달았는지는 API 가 알려주지 않으므로, 창 안이면 잡는 쪽으로 둔다."""
+        Fake([msg(self.ts(10), "옛 QA 목록", [emoji.TRIGGER])]).install()
+        self.assertEqual(len(detect.detect(CH, 14)), 1)
 
-    def test_최근_답글이_없는_스레드는_열지_않는다(self):
-        """훑는 범위를 넓힌 대가를 여기서 돌려받는다(불필요한 replies 호출 회피)."""
-        old = self.ts(10)
+    def test_창_밖_노드는_잡히지_않는다(self):
+        Fake([msg(self.ts(30), "아주 옛 지시", [emoji.TRIGGER])]).install()
+        self.assertEqual(detect.detect(CH, 14), [])
+
+    def test_창_안에_답글이_없는_스레드는_열지_않는다(self):
+        """불필요한 replies 호출 회피."""
+        old = self.ts(30)
         opened = []
 
         parent = msg(old, "옛 QA", [], reply_count=1, latest_reply=old)
@@ -192,7 +197,7 @@ class Freshness(ClockFixed):
         slack.replies = lambda channel, thread_ts, limit=200: (
             opened.append(thread_ts) or real(channel, thread_ts, limit))
 
-        self.assertEqual(detect.detect(CH, 7), [])
+        self.assertEqual(detect.detect(CH, 14), [])
         self.assertEqual(opened, [])
 
 

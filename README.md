@@ -37,6 +37,7 @@ flowchart LR
 | 정책 파일 작성법 | [policy-contract.md](docs/design/policy-contract.md) |
 | 설치·등록 절차 | [setup.md](docs/runbook/setup.md) |
 | 결정의 근거 | [decisions.md](docs/decisions.md) |
+| 막혔을 때 — 증상별 원인·조치 | [troubleshooting.md](docs/troubleshooting.md) |
 
 ## 설계의 축
 

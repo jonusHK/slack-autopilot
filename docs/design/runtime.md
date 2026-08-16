@@ -233,7 +233,7 @@ python3 bin/lock.py --repo owner/name --ts <ts> --reuse <브랜치>  # 미병합
 | **아무 일도 안 일어남**(이모지·답글 무변화) | **기본 Trusted 네트워크가 `slack.com` 을 막는다** — 허용 목록에 슬랙이 없다 | Network access 를 **Custom** 으로, `slack.com` 추가 + "기본 패키지 매니저 목록도 포함" 체크(setup.md §3.5 ④) |
 | `gh: command not found` | **VM 에 `gh` 가 없다** — 설치돼 있다고 가정하지 않는다 | `gh` 를 쓰지 않는다. `bin/github_api.py` 가 REST API 를 직접 부른다 |
 | `could not read Username for 'https://github.com'` | **VM 에 GitHub 자격이 없다.** 엔진 레포는 퍼블릭이라 그냥 클론되지만, 대상 레포 push·PR 은 자격이 필요하다 | `github_api.setup_git()` 이 자격 저장 파일을 깔아둔다. 주소에는 토큰을 넣지 않는다 |
-| `GitHub access is not enabled for this session` (HTTP 403) | 클라우드 세션에 GitHub 연동이 없다. 조직 계정이면 관리자만 붙일 수 있다 | `GH_TOKEN` 을 환경변수로 주는 편이 확실하다 — 권한이 대상 레포로 한정되고 관리자를 기다리지 않는다 |
+| `GitHub access is not enabled for this session` (HTTP 403) | **루틴에 레포가 안 붙었거나 `allowed_tools` 로 조였다.** 토큰·App 문제가 아니다 | `session_context.sources` 를 넣고 도구 제한을 풀라 — 자세히는 [troubleshooting.md](../troubleshooting.md) |
 | 같은 노드가 두 번 처리됨 | 클레임 전에 작업을 시작했다 | 순서는 **클레임 → 작업**. 4단계에서는 브랜치 push 가 먼저 |
 | 봇이 자기 답글을 다시 집음 | ▶️ 를 봇이 붙였다는 뜻 — 있을 수 없다 | `emoji.assert_bot_may_add` 가 막는다. 뚫렸으면 그게 사고다 |
 

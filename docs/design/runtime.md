@@ -48,7 +48,7 @@ sequenceDiagram
 | 도는 곳 | 세션 VM(Anthropic 호스팅) | 사람의 맥은 관여하지 않는다 |
 | 자격 증명 | 전용 클라우드 환경의 환경변수 | 시크릿 저장소가 없어 **환경을 전용으로 가른다**(§7) |
 | 슬랙 접근 | 봇 토큰 + Web API(python) | 커넥터(MCP) 의존 금지 — headless 런에 없을 수 있다 |
-| GitHub 접근 | REST API 직접 호출 | **토큰 불요** — 레포가 세션에 붙어 있으면 프록시가 자격을 붙인다. `gh` 는 없을 수 있다 |
+| GitHub 접근 | REST API 직접 호출 | 레포를 붙이면 클론·push·PR 은 프록시 자격으로 된다. **CI 상태만 `GH_TOKEN` 필요**. `gh` 는 없을 수 있다 |
 | 무거운 검증 | 대상 레포 CI(4단계) | 에이전트가 e2e 를 직접 돌지 않는다 |
 
 ## 2.5 VM 은 이 맥과 다르다 (프롬프트를 쓰기 전에 볼 것)
@@ -111,7 +111,7 @@ scripts/
 ## 4. 검출 — `detect.py`
 
 ```
-python3 bin/detect.py --channel "$SLACK_CHANNEL_ID" --allow-users "$SLACK_HUMAN_USERS" --days 14
+python3 bin/detect.py --all-projects --days 14
 ```
 
 1. `conversations.history(oldest = now - days)` 로 창을 읽는다(**기본 14일, 스캔·판정 공용**).

@@ -11,20 +11,25 @@
 cd ~/slack-autopilot
 # .env 는 로컬 실행용 — VM 에는 없다(값은 환경변수). 있을 때만 읽는다.
 [ -f .env ] && { set -a; . ./.env; set +a; } || true   # 없어도 실패가 아니다
-python3 bin/detect.py --channel "$SLACK_CHANNEL_ID" --allow-users "$SLACK_HUMAN_USERS" --mode triage --days 14
+python3 bin/detect.py --all-projects --mode triage --days 14
 ```
 
 `[]` 이면 **아무 보고도 남기지 말고 즉시 종료**한다. 대부분의 실행이 이 경로다.
 
+**노드마다 프로젝트가 다를 수 있다.** 순회 모드는 선언된 전 프로젝트의 노드를 한 목록으로
+돌려주고, 각 노드에 `project`·`repo`·`channel` 이 실려 있다. 아래에서 `<노드의 repo>` 는
+**그 노드의 `repo`** 다 — 전역 변수 하나로 굳히지 않는다(그렇게 굳혀서 프로젝트마다 트리거를
+새로 만들어야 했던 것이 D-011 이다).
+
 노드는 **오래된 것부터** 처리한다. 각 노드마다:
 
 1. **스레드를 먼저 읽는다** — 그 스레드에 **미병합 PR** 이 있는지 본다(봇의 📬 답글에 PR
-   링크가 있고, `python3 bin/github_api.py pr-get --repo "$TARGET_REPO" --pr <url>` 의
+   링크가 있고, `python3 bin/github_api.py pr-get --repo <노드의 repo> --pr <url>` 의
    `state` 가 `open` 이면 미병합).
 2. **락을 건다**(engine.md §3 — 이모지가 아니라 이것이 진짜 락):
    ```bash
-   python3 bin/lock.py --repo "$TARGET_REPO" --ts <노드 ts>            # 새 작업
-   python3 bin/lock.py --repo "$TARGET_REPO" --ts <ts> --reuse <브랜치> # 미병합 PR 이 있을 때
+   python3 bin/lock.py --repo <노드의 repo> --ts <노드 ts>            # 새 작업
+   python3 bin/lock.py --repo <노드의 repo> --ts <ts> --reuse <브랜치> # 미병합 PR 이 있을 때
    ```
    종료코드 1 이면 **다른 실행이 잡은 것** — 그 노드는 건너뛴다.
 3. 락을 잡은 뒤에 💬 를 붙인다(`bin/mark.py --emoji speech_balloon`).
@@ -85,8 +90,8 @@ python3 bin/detect.py --channel "$SLACK_CHANNEL_ID" --allow-users "$SLACK_HUMAN_
 ## 5. CI 그린까지 자기 수정 (D-004)
 
 ```bash
-python3 bin/github_api.py pr-get --repo "$TARGET_REPO" --pr <pr-url>     # head_sha 를 얻는다
-python3 bin/github_api.py checks --repo "$TARGET_REPO" --ref <head_sha>
+python3 bin/github_api.py pr-get --repo <노드의 repo> --pr <pr-url>     # head_sha 를 얻는다
+python3 bin/github_api.py checks --repo <노드의 repo> --ref <head_sha>
 ```
 
 `state` 가 `pending` 이면 잠시 뒤 다시 부른다(감시 모드는 없다 — 폴링이다).

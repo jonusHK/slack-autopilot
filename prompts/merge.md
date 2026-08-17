@@ -8,10 +8,12 @@
 cd ~/slack-autopilot
 # .env 는 로컬 실행용 — VM 에는 없다(값은 환경변수). 있을 때만 읽는다.
 [ -f .env ] && { set -a; . ./.env; set +a; } || true   # 없어도 실패가 아니다
-python3 bin/detect.py --channel "$SLACK_CHANNEL_ID" --allow-users "$SLACK_HUMAN_USERS" --mode merge --days 14
+python3 bin/detect.py --all-projects --mode merge --days 14
 ```
 
 `[]` 이면 **아무 보고도 남기지 말고 즉시 종료**한다.
+
+노드마다 프로젝트가 다를 수 있다 — `<노드의 repo>` 는 그 노드의 `repo` 다.
 
 노드는 🚀 가 붙고 ✅ 가 없는 메시지다. 보통 **PR 링크가 담긴 봇 답글**이다. 링크가 없으면
 스레드를 읽어 찾는다. 끝내 못 찾으면 ❌ 와 함께 "어느 PR 인지 못 찾았어요"를 남긴다 —
@@ -24,11 +26,11 @@ python3 bin/detect.py --channel "$SLACK_CHANNEL_ID" --allow-users "$SLACK_HUMAN_
 
 각 PR 마다:
 
-1. `python3 bin/github_api.py pr-get --repo "$TARGET_REPO" --pr <url>`
+1. `python3 bin/github_api.py pr-get --repo <노드의 repo> --pr <url>`
    (바뀐 파일 목록은 `pr-files`, 병합은 `pr-merge`)
    - `merged` 가 참이면 ✅ 만 붙이고 넘어간다(재실행 안전).
    - `state` 가 `closed` 인데 병합이 아니면 ❌ 와 사유.
-2. **CI 확인** — `python3 bin/github_api.py checks --repo "$TARGET_REPO" --ref <head_sha>`.
+2. **CI 확인** — `python3 bin/github_api.py checks --repo <노드의 repo> --ref <head_sha>`.
    `success` 가 아니면 병합하지 않는다. ❌ + `failed` 의 검사 이름.
    `none`(붙은 검사 없음)은 통과가 아니다 — ❓ 로 사람에게 묻는다.
 3. **금지선 확인**(정책 파일 `## 병합 금지선`). 아래에 걸리면 병합하지 말고 ❓ + 이유:

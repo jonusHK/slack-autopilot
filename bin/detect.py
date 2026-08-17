@@ -26,6 +26,7 @@ import sys
 import time
 
 import emoji
+import projects
 import slack_api as slack
 
 # (있어야 하는 것, 하나라도 있으면 제외할 것들)
@@ -39,9 +40,11 @@ MODES = {
 }
 
 
-def _node(msg, channel, kind, parent_ts=None):
+def _node(msg, channel, kind, parent_ts=None, project=None, repo=None):
     return {
         "kind": kind,                       # "message" | "reply"
+        "project": project,                 # 어느 프로젝트의 노드인가(순회 모드에서만)
+        "repo": repo,                       # 그 프로젝트의 대상 레포
         "channel": channel,
         "ts": msg["ts"],
         "parent_ts": parent_ts,
@@ -53,7 +56,7 @@ def _node(msg, channel, kind, parent_ts=None):
     }
 
 
-def detect(channel, days, mode="triage", allow_users=None):
+def detect(channel, days, mode="triage", allow_users=None, project=None, repo=None):
     """최근 `days` 안의 노드 중 다음 손이 필요한 것을 찾는다.
 
     **창은 하나다.** 스캔 범위와 판정 기준을 가르면 "오래된 메시지 자체에 오늘 ▶️" 가 조용히
@@ -107,18 +110,32 @@ def detect(channel, days, mode="triage", allow_users=None):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--channel", required=True)
+    src = ap.add_mutually_exclusive_group(required=True)
+    src.add_argument("--channel", help="단일 채널(디버깅·단일 프로젝트 설치)")
+    src.add_argument("--all-projects", action="store_true",
+                     help="선언된 전 프로젝트를 순회한다(AUTOPILOT_PROJECTS). "
+                          "루틴은 이 모드를 쓴다 — 프로젝트마다 트리거를 새로 만들지 않는다")
     ap.add_argument("--mode", choices=sorted(MODES), default="triage")
     ap.add_argument("--days", type=int, default=14,
                     help="검출 창(기본 14일). 스캔·판정 공용 — 가르면 사각지대가 생긴다")
-    ap.add_argument("--allow-users", required=True,
+    ap.add_argument("--allow-users",
                     help="▶️·🚀 를 붙일 수 있는 슬랙 사용자 ID(쉼표 구분). "
-                         "**필수다** — 빠뜨리면 argparse 가 막는다(조용히 전부 허용되지 않게)")
+                         "--channel 과 함께 쓸 때 **필수**다(조용히 전부 허용되지 않게). "
+                         "--all-projects 에서는 프로젝트 선언에서 읽는다")
     args = ap.parse_args()
 
-    allow = {u.strip() for u in args.allow_users.split(",") if u.strip()}
     try:
-        nodes = detect(args.channel, args.days, args.mode, allow)
+        if args.all_projects:
+            nodes = []
+            for p in projects.load():
+                nodes += detect(p["channel"], args.days, args.mode,
+                                p["allow_users"], p["name"], p["repo"])
+            nodes.sort(key=lambda n: float(n["ts"]))   # 프로젝트를 섞어도 오래된 것부터
+        else:
+            if not args.allow_users:
+                ap.error("--channel 을 쓸 때는 --allow-users 도 필요하다")
+            allow = {u.strip() for u in args.allow_users.split(",") if u.strip()}
+            nodes = detect(args.channel, args.days, args.mode, allow)
     except ValueError as e:
         print(f"검출 실패: {e}", file=sys.stderr)
         return 2

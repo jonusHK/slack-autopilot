@@ -7,7 +7,8 @@
 
 ## 0. 준비 — 환경 확인과 실패 보고
 
-**필요한 환경변수**: `SLACK_BOT_TOKEN` · `SLACK_CHANNEL_ID` · `TARGET_REPO`.
+**필요한 환경변수**: `SLACK_BOT_TOKEN` · `AUTOPILOT_PROJECTS` + 각 프로젝트의
+`SLACK_CHANNEL_ID_*` · `TARGET_REPO_*` · `SLACK_HUMAN_USERS`(자세히는 `bin/projects.py`).
 하나라도 비어 있으면 **아무 작업도 하지 말고** §0-b 로 알리고 종료한다. 빈 값으로 엉뚱한
 채널을 조회하는 것보다 안 도는 편이 낫다. **토큰 값은 어떤 형태로도 출력하지 않는다**(마스킹도).
 
@@ -31,7 +32,7 @@ python3 bin/report_failure.py --channel "$SLACK_CHANNEL_ID" --reason "<한 줄 �
 cd ~/slack-autopilot
 # .env 는 로컬 실행용 — VM 에는 없다(값은 환경변수). 있을 때만 읽는다.
 [ -f .env ] && { set -a; . ./.env; set +a; } || true   # 없어도 실패가 아니다
-python3 bin/detect.py --channel "$SLACK_CHANNEL_ID" --allow-users "$SLACK_HUMAN_USERS" --days 14
+python3 bin/detect.py --all-projects --days 14
 ```
 
 **결과가 `[]` 이면 아무것도 하지 말고 즉시 종료한다.** 요약도 보고도 남기지 않는다 —
@@ -39,7 +40,7 @@ python3 bin/detect.py --channel "$SLACK_CHANNEL_ID" --allow-users "$SLACK_HUMAN_
 
 ## 2. 정책 파일 읽기
 
-대상 레포(`TARGET_REPO`)의 루트 `AUTOMATION.md` 를 읽는다.
+그 노드의 대상 레포(노드의 `repo`) 루트 `AUTOMATION.md` 를 읽는다.
 **없으면 분류하지 않는다** — 전 항목을 ❓ 로 두고 "정책 파일이 없어 자동 처리 대상이 아니다"만
 답글로 남긴다(D-001 ③).
 

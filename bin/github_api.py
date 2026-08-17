@@ -37,13 +37,19 @@ class GitHubError(RuntimeError):
 
 
 def _token():
+    """토큰이 있으면 쓰고, **없으면 없는 채로 간다.**
+
+    클라우드 세션에서는 레포가 세션에 붙어 있으면 프록시가 밖에서 자격을 붙여 준다 —
+    그래서 토큰이 없어도 REST 가 200 으로 돌아온다(2026-08-17 실측). 예전에는 여기서
+    SystemExit 으로 죽였는데, 그건 **실제로 필요 없는 것을 필수로 만든 것**이었다.
+    자리표시자(`proxy-injected`)도 진짜 토큰이 아니라 붙이지 않는다.
+
+    토큰 없이 정말로 권한이 모자란 경우는 호출이 403/404 로 돌아오고, 그 본문에
+    무엇이 막혔는지 적혀 있다. **그 판단은 호출부가 한다** — 여기서 미리 죽이면
+    "왜 막혔는지"를 알려 주는 본문을 볼 기회가 사라진다.
+    """
     tok = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN") or ""
-    if not tok:
-        raise SystemExit(
-            "GH_TOKEN 이 비어 있습니다. 클라우드 환경변수에 등록하거나 "
-            "GitHub 연결(Claude GitHub App)을 켜세요."
-        )
-    return tok
+    return "" if tok == "proxy-injected" else tok
 
 
 def scrub(text):
@@ -60,11 +66,13 @@ def call(path, method="GET", body=None, retries=3):
     url = path if path.startswith("http") else API + path
     data = json.dumps(body).encode() if body is not None else None
     headers = {
-        "Authorization": f"Bearer {_token()}",
         "Accept": "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
         "User-Agent": "slack-autopilot",
     }
+    tok = _token()
+    if tok:
+        headers["Authorization"] = f"Bearer {tok}"
     if data:
         headers["Content-Type"] = "application/json"
 
@@ -90,22 +98,29 @@ CRED_FILE = os.path.expanduser("~/.git-credentials-autopilot")
 
 
 def setup_git():
-    """토큰을 자격 저장 파일에 두고 git 이 그걸 쓰게 한다.
+    """git 이 무인으로 돌 수 있게 준비한다. **토큰이 있을 때만** 자격 파일을 깐다.
 
-    이렇게 해두면 원격 주소를 `https://github.com/owner/name.git` 그대로 쓸 수 있다.
-    토큰이 원격 주소에도, 프로세스 인자에도, git 에러 문구에도 남지 않는다.
+    토큰이 있으면 자격 저장 파일에 두고 원격 주소는 `https://github.com/owner/name.git`
+    그대로 쓴다 — 토큰이 주소에도, 프로세스 인자에도, git 에러 문구에도 남지 않는다.
+
+    토큰이 없으면 아무 자격도 깔지 않는다. 클라우드 세션에서는 레포가 세션에 붙어 있으면
+    프록시가 밖에서 자격을 붙여 주므로 그대로 클론·push 가 된다(2026-08-17 실측).
+    프롬프트만은 어느 쪽이든 막는다 — 자격이 모자랄 때 사용자 이름을 물으며 멈추면
+    무인 실행이 조용히 매달린다.
     """
-    with open(CRED_FILE, "w") as f:
-        f.write(f"https://x-access-token:{_token()}@github.com\n")
-    os.chmod(CRED_FILE, 0o600)
-    subprocess.run(
-        ["git", "config", "--global", "credential.helper", f"store --file={CRED_FILE}"],
-        check=True,
-    )
+    tok = _token()
+    if tok:
+        with open(CRED_FILE, "w") as f:
+            f.write(f"https://x-access-token:{tok}@github.com\n")
+        os.chmod(CRED_FILE, 0o600)
+        subprocess.run(
+            ["git", "config", "--global", "credential.helper", f"store --file={CRED_FILE}"],
+            check=True,
+        )
     # 자격이 없을 때 git 이 프롬프트를 띄우고 멈추는 것을 막는다(무인 실행).
     subprocess.run(["git", "config", "--global", "core.askPass", ""], check=True)
     os.environ.setdefault("GIT_TERMINAL_PROMPT", "0")
-    return CRED_FILE
+    return CRED_FILE if tok else None
 
 
 def clone_url(repo):

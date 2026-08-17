@@ -82,15 +82,31 @@ def branch_age_minutes(path, branch):
     return (time.time() - int(out)) / 60
 
 
-def is_stale(repo, path, branch, stale_minutes):
-    """PR 이 하나도 없고 브랜치가 충분히 오래됐으면 죽은 락이다.
+def commits_ahead(path, base, branch):
+    """base 대비 이 브랜치에 쌓인 커밋 수. 0 이면 락만 잡고 아무 일도 안 한 것이다."""
+    run(["git", "fetch", "origin", base, branch], cwd=path, check=False)
+    out = run(["git", "rev-list", "--count", f"origin/{base}..origin/{branch}"],
+              cwd=path).stdout.strip()
+    return int(out or 0)
 
-    상한(자기 수정 60분)보다 넉넉히 잡아야 **살아 있는 작업을 뺏지 않는다**. PR 이 하나라도
-    있으면(열렸든 닫혔든) 그 실행은 최소한 PR 을 여는 데까지 갔다는 뜻이라 회수하지 않는다.
+
+def is_stale(repo, path, branch, stale_minutes, empty_minutes, base="main"):
+    """PR 이 없고 브랜치가 충분히 오래됐으면 죽은 락이다. **기준은 커밋 유무로 갈린다.**
+
+    PR 이 하나라도 있으면(열렸든 닫혔든) 그 실행은 PR 을 여는 데까지 갔다는 뜻이라 회수하지
+    않는다. 그다음이 시간인데, 하나로 두면 양쪽이 다 손해였다.
+
+    - **커밋이 있는 브랜치**는 넉넉히 기다린다(기본 120분). 자기 수정 루프 상한이 60분이라
+      그보다 짧게 잡으면 **일하고 있는 실행을 뺏는다** — 그쪽이 교착보다 비싸다.
+    - **커밋이 0건인 빈 브랜치**는 짧게 본다(기본 20분). 락만 잡고 죽었다는 뜻이라 뺏을
+      작업 자체가 없다. 여기까지 120분을 기다리면 그동안 그 노드는 💬 때문에 검출에서도
+      빠져 **아무도 손대지 않는 조용한 교착**이 된다(4단계 첫 실행에서 실제로 겪었다).
     """
     if has_open_pr(repo, branch):
         return False
-    return branch_age_minutes(path, branch) >= stale_minutes
+    age = branch_age_minutes(path, branch)
+    limit = stale_minutes if commits_ahead(path, base, branch) else empty_minutes
+    return age >= limit
 
 
 def main():
@@ -102,8 +118,15 @@ def main():
         "--stale-minutes",
         type=int,
         default=120,
-        help="PR 없는 브랜치를 죽은 락으로 보는 경과 시간(기본 120분). "
+        help="커밋이 쌓인 브랜치를 죽은 락으로 보는 경과 시간(기본 120분). "
              "자기 수정 상한 60분보다 넉넉해야 살아 있는 작업을 뺏지 않는다.",
+    )
+    ap.add_argument(
+        "--empty-minutes",
+        type=int,
+        default=20,
+        help="커밋이 0건인 빈 브랜치를 죽은 락으로 보는 경과 시간(기본 20분). "
+             "락만 잡고 죽은 것이라 뺏을 작업이 없다 — 길게 잡으면 조용한 교착이 된다.",
     )
     ap.add_argument("--work-dir", default=os.path.expanduser("~/work"))
     ap.add_argument(
@@ -127,11 +150,13 @@ def main():
         if remote_has(path, branch):
             # 이미 누가 잡았다. 살아 있는 작업이면 물러나고(이어서 하려면 --reuse 로 의도를
             # 드러낸다), 죽은 락이면 회수한다.
-            if not is_stale(args.repo, path, branch, args.stale_minutes):
+            if not is_stale(args.repo, path, branch, args.stale_minutes,
+                            args.empty_minutes, args.base):
                 print(f"이미 잡힌 노드다(살아 있음): {branch}", file=sys.stderr)
                 return 1
             age = int(branch_age_minutes(path, branch))
-            print(f"죽은 락 회수: {branch} (PR 없음 · {age}분 경과)", file=sys.stderr)
+            kind = "커밋 있음" if commits_ahead(path, args.base, branch) else "빈 브랜치"
+            print(f"죽은 락 회수: {branch} (PR 없음 · {kind} · {age}분 경과)", file=sys.stderr)
             run(["git", "push", "origin", "--delete", branch], cwd=path)
             mode = "reclaimed"
 

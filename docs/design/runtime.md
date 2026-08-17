@@ -111,7 +111,7 @@ scripts/
 ## 4. 검출 — `detect.py`
 
 ```
-python3 bin/detect.py --channel "$SLACK_CHANNEL_ID" --days 14
+python3 bin/detect.py --channel "$SLACK_CHANNEL_ID" --allow-users "$SLACK_HUMAN_USERS" --days 14
 ```
 
 1. `conversations.history(oldest = now - days)` 로 창을 읽는다(**기본 14일, 스캔·판정 공용**).

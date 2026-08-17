@@ -17,7 +17,7 @@ slack-autopilot 엔진의 루틴이다. 명세는 레포 안에 있고, 이 프�
    그다음 cd ~/slack-autopilot
 
 2) 먼저 할 일이 있는지부터 본다(명세를 읽기 전에):
-   python3 bin/detect.py --channel "$SLACK_CHANNEL_ID" --days 14
+   python3 bin/detect.py --channel "$SLACK_CHANNEL_ID" --allow-users "$SLACK_HUMAN_USERS" --days 14
    결과가 [] 이면 아무것도 하지 말고 즉시 종료한다 — 보고도 요약도 남기지 않는다.
    실행의 대부분이 이 경로다.
 

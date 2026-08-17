@@ -53,13 +53,19 @@ def _node(msg, channel, kind, parent_ts=None):
     }
 
 
-def detect(channel, days, mode="triage"):
+def detect(channel, days, mode="triage", allow_users=None):
     """최근 `days` 안의 노드 중 다음 손이 필요한 것을 찾는다.
 
     **창은 하나다.** 스캔 범위와 판정 기준을 가르면 "오래된 메시지 자체에 오늘 ▶️" 가 조용히
     누락된다(실제로 겪었다). 부모가 오래된 스레드의 **새 답글**은 답글 자신이 창 안이므로 잡힌다.
     """
     require, excludes = MODES[mode]
+    if not allow_users:
+        # **허용 목록이 없으면 아무것도 집지 않는다** — 빠뜨렸을 때 꺼지는 쪽이 맞다.
+        # "목록이 없으면 전부 허용"으로 뒤집으면, 변수 하나를 빠뜨린 것이 곧 아무나
+        # 봇에게 코드를 쓰게 만드는 문이 된다.
+        raise ValueError("허용 사용자 목록이 비어 있다 — --allow-users 를 넘겨라")
+    allow_users = set(allow_users)
     now = time.time()
     cutoff = now - days * 86400
     found = []
@@ -68,8 +74,13 @@ def detect(channel, days, mode="triage"):
         if float(msg["ts"]) < cutoff:
             return                           # 창 밖
         rx = slack.reactions_of(msg)
-        if require in rx and not (rx & set(excludes)):
-            found.append(_node(msg, channel, kind, parent_ts))
+        if not (require in rx and not (rx & set(excludes))):
+            return
+        # **사람 전용 이모지는 누가 붙였는지가 곧 권한이다.** 이름만 맞아도, 허용 목록
+        # 밖의 사람이 붙인 것이면 없는 것으로 본다(채널 멤버 누구나 봇을 부리는 것을 막는다).
+        if not (slack.reactors_of(msg).get(require, set()) & allow_users):
+            return
+        found.append(_node(msg, channel, kind, parent_ts))
 
     for msg in slack.history(channel, oldest=f"{cutoff:.6f}"):
         if msg.get("subtype") in {"channel_join", "channel_leave"}:
@@ -100,10 +111,17 @@ def main():
     ap.add_argument("--mode", choices=sorted(MODES), default="triage")
     ap.add_argument("--days", type=int, default=14,
                     help="검출 창(기본 14일). 스캔·판정 공용 — 가르면 사각지대가 생긴다")
+    ap.add_argument("--allow-users", required=True,
+                    help="▶️·🚀 를 붙일 수 있는 슬랙 사용자 ID(쉼표 구분). "
+                         "**필수다** — 빠뜨리면 argparse 가 막는다(조용히 전부 허용되지 않게)")
     args = ap.parse_args()
 
+    allow = {u.strip() for u in args.allow_users.split(",") if u.strip()}
     try:
-        nodes = detect(args.channel, args.days, args.mode)
+        nodes = detect(args.channel, args.days, args.mode, allow)
+    except ValueError as e:
+        print(f"검출 실패: {e}", file=sys.stderr)
+        return 2
     except slack.SlackError as e:
         print(f"검출 실패: {e}", file=sys.stderr)
         if e.error == "not_in_channel":

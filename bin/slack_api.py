@@ -98,3 +98,13 @@ def post(channel, text, thread_ts=None):
 
 def reactions_of(msg):
     return {r["name"] for r in msg.get("reactions", [])}
+
+
+def reactors_of(msg):
+    """이모지 이름 → 그것을 붙인 사용자 ID 집합.
+
+    사람 전용 이모지(▶️·🚀)는 **누가 붙였는지가 곧 권한**이다. 이름만 보면 채널에 있는
+    누구든 봇에게 코드를 쓰게 만들 수 있다. 슬랙 응답에 `users` 가 이미 실려 오므로
+    추가 호출 없이 판정할 수 있다(`reactions:read` 스코프로 충분).
+    """
+    return {r["name"]: set(r.get("users", [])) for r in msg.get("reactions", [])}

@@ -17,6 +17,10 @@ import slack_api as slack  # noqa: E402
 
 CH = "C_TEST"
 
+# 허용된 사람(▶️·🚀 를 붙일 권한이 있는 ID)과 그렇지 않은 사람.
+OWNER, STRANGER = "U_OWNER", "U_STRANGER"
+ALLOW = {OWNER}
+
 # 검출은 이제 신선도를 보므로 시계를 고정한다. 픽스처의 ts 는 이 값 기준의 초 오프셋이다.
 NOW = 1_800_000_000.0
 
@@ -45,9 +49,10 @@ class ClockFixed(unittest.TestCase):
         detect.time = self._time
 
 
-def msg(ts, text, reactions=(), **extra):
+def msg(ts, text, reactions=(), by=OWNER, **extra):
+    """`reactions` 는 이름 목록. 누가 붙였는지는 `by` 로 지정한다(기본은 허용된 사람)."""
     m = {"ts": ts, "text": text, "user": "U1",
-         "reactions": [{"name": r} for r in reactions]}
+         "reactions": [{"name": r, "users": [by]} for r in reactions]}
     m.update(extra)
     return m
 
@@ -68,24 +73,24 @@ class DetectRules(ClockFixed):
 
     def test_트리거만_있는_메시지가_잡힌다(self):
         Fake([msg(t(90), "고쳐줘", [emoji.TRIGGER])]).install()
-        nodes = detect.detect(CH, 7)
+        nodes = detect.detect(CH, 7, allow_users=ALLOW)
         self.assertEqual([n["ts"] for n in nodes], [t(90)])
         self.assertEqual(nodes[0]["kind"], "message")
 
     def test_클레임된_메시지는_제외된다(self):
         Fake([msg(t(90), "고쳐줘", [emoji.TRIGGER, emoji.CLAIM])]).install()
-        self.assertEqual(detect.detect(CH, 7), [])
+        self.assertEqual(detect.detect(CH, 7, allow_users=ALLOW), [])
 
     def test_끝난_노드는_클레임이_없어도_제외된다(self):
         """✅·❌ 는 종료 상태다 — 💬 만 보면 끝난 일을 다시 집는다(실제로 겪었다)."""
         for done in (emoji.DONE, emoji.FAILED):
             Fake([msg(t(90), "이미 끝난 지시", [emoji.TRIGGER, done])]).install()
-            self.assertEqual(detect.detect(CH, 7), [], f"{done} 가 붙었는데 다시 잡혔다")
+            self.assertEqual(detect.detect(CH, 7, allow_users=ALLOW), [], f"{done} 가 붙었는데 다시 잡혔다")
 
     def test_트리거_없으면_잡히지_않는다(self):
         Fake([msg(t(90), "그냥 메모", []),
               msg(t(80), "질문", [emoji.NEEDS_DECISION])]).install()
-        self.assertEqual(detect.detect(CH, 7), [])
+        self.assertEqual(detect.detect(CH, 7, allow_users=ALLOW), [])
 
     def test_스레드_답글도_같은_규칙으로_잡힌다(self):
         """D-006 — ❓ 로 보류된 항목에 사람이 결정을 답글로 적고 ▶️ 를 다는 경로."""
@@ -95,7 +100,7 @@ class DetectRules(ClockFixed):
             msg(t(80), "봇: 판단 지점 A/B", []),
             msg(t(70), "A 로 가자", [emoji.TRIGGER]),
         ]}).install()
-        nodes = detect.detect(CH, 7)
+        nodes = detect.detect(CH, 7, allow_users=ALLOW)
         self.assertEqual([n["ts"] for n in nodes], [t(70)])
         self.assertEqual(nodes[0]["kind"], "reply")
         self.assertEqual(nodes[0]["parent_ts"], t(90))
@@ -103,19 +108,51 @@ class DetectRules(ClockFixed):
     def test_부모와_답글이_동시에_잡힐_수_있다(self):
         parent = msg(t(90), "QA 목록", [emoji.TRIGGER], reply_count=1)
         Fake([parent], {t(90): [parent, msg(t(60), "추가 지시", [emoji.TRIGGER])]}).install()
-        self.assertEqual([n["ts"] for n in detect.detect(CH, 7)], [t(90), t(60)])
+        self.assertEqual([n["ts"] for n in detect.detect(CH, 7, allow_users=ALLOW)], [t(90), t(60)])
 
     def test_오래된_것부터_정렬된다(self):
         """같은 스레드의 지시 순서가 뒤집히면 나중 결정이 먼저 반영된다."""
         Fake([msg(t(100), "세번째", [emoji.TRIGGER]),
               msg(t(300), "첫번째", [emoji.TRIGGER]),
               msg(t(200), "두번째", [emoji.TRIGGER])]).install()
-        self.assertEqual([n["ts"] for n in detect.detect(CH, 7)],
+        self.assertEqual([n["ts"] for n in detect.detect(CH, 7, allow_users=ALLOW)],
                          [t(300), t(200), t(100)])
 
     def test_입퇴장_시스템메시지는_무시된다(self):
         Fake([msg(t(90), "님이 채널에 참여함", [emoji.TRIGGER], subtype="channel_join")]).install()
-        self.assertEqual(detect.detect(CH, 7), [])
+        self.assertEqual(detect.detect(CH, 7, allow_users=ALLOW), [])
+
+
+class ReactorPermission(ClockFixed):
+    """▶️·🚀 는 **누가 붙였는지가 곧 권한**이다 — 이름만 맞아도 안 된다."""
+
+    def test_허용된_사람이_붙이면_잡는다(self):
+        Fake([msg(t(60), "고쳐줘", [emoji.TRIGGER], by=OWNER)]).install()
+        self.assertEqual(len(detect.detect(CH, 7, allow_users=ALLOW)), 1)
+
+    def test_다른_사람이_붙이면_없는_것으로_본다(self):
+        """채널 멤버 누구나 봇에게 코드를 쓰게 만들 수 있으면 게이트가 없는 것이다."""
+        Fake([msg(t(60), "고쳐줘", [emoji.TRIGGER], by=STRANGER)]).install()
+        self.assertEqual(detect.detect(CH, 7, allow_users=ALLOW), [])
+
+    def test_둘_다_붙였으면_잡는다(self):
+        """허용된 사람이 붙인 사실은 남의 반응이 섞여도 사라지지 않는다."""
+        m = msg(t(60), "고쳐줘", [], by=OWNER)
+        m["reactions"] = [{"name": emoji.TRIGGER, "users": [STRANGER, OWNER]}]
+        Fake([m]).install()
+        self.assertEqual(len(detect.detect(CH, 7, allow_users=ALLOW)), 1)
+
+    def test_병합도_같은_규칙을_받는다(self):
+        """🚀 는 되돌리기 어려운 쪽이라 더 중요하다."""
+        Fake([msg(t(60), "PR 링크", [emoji.MERGE], by=STRANGER)]).install()
+        self.assertEqual(detect.detect(CH, 7, mode="merge", allow_users=ALLOW), [])
+
+    def test_허용_목록이_비면_아무것도_집지_않고_터진다(self):
+        """빠뜨렸을 때 '전부 허용'으로 뒤집히면 변수 하나가 문이 된다."""
+        Fake([msg(t(60), "고쳐줘", [emoji.TRIGGER], by=OWNER)]).install()
+        for empty in (None, set(), ""):
+            with self.assertRaises(ValueError):
+                detect.detect(CH, 7, allow_users=empty)
 
 
 class EmojiGuard(unittest.TestCase):
@@ -146,7 +183,7 @@ class MergeMode(ClockFixed):
             msg(t(50), "PR 열었어요 https://github.com/o/r/pull/7",
                 [emoji.PR_OPEN, emoji.MERGE]),
         ]}).install()
-        nodes = detect.detect(CH, 7, mode="merge")
+        nodes = detect.detect(CH, 7, mode="merge", allow_users=ALLOW)
         self.assertEqual([n["ts"] for n in nodes], [t(50)])
 
     def test_이미_병합된_것은_잡히지_않는다(self):
@@ -155,14 +192,14 @@ class MergeMode(ClockFixed):
             parent,
             msg(t(50), "PR", [emoji.PR_OPEN, emoji.MERGE, emoji.DONE]),
         ]}).install()
-        self.assertEqual(detect.detect(CH, 7, mode="merge"), [])
+        self.assertEqual(detect.detect(CH, 7, mode="merge", allow_users=ALLOW), [])
 
     def test_모드가_서로를_침범하지_않는다(self):
         """▶️ 노드가 병합 검출에 섞이면 코드가 안 된 것을 병합하려 든다."""
         Fake([msg(t(90), "새 지시", [emoji.TRIGGER]),
               msg(t(80), "PR", [emoji.MERGE])]).install()
-        self.assertEqual([n["ts"] for n in detect.detect(CH, 7, mode="triage")], [t(90)])
-        self.assertEqual([n["ts"] for n in detect.detect(CH, 7, mode="merge")], [t(80)])
+        self.assertEqual([n["ts"] for n in detect.detect(CH, 7, mode="triage", allow_users=ALLOW)], [t(90)])
+        self.assertEqual([n["ts"] for n in detect.detect(CH, 7, mode="merge", allow_users=ALLOW)], [t(80)])
 
 
 class Freshness(ClockFixed):
@@ -177,7 +214,7 @@ class Freshness(ClockFixed):
         parent = msg(old, "옛 QA", [emoji.NEEDS_DECISION],
                      reply_count=1, latest_reply=fresh)
         Fake([parent], {old: [parent, msg(fresh, "A 로 가자", [emoji.TRIGGER])]}).install()
-        nodes = detect.detect(CH, 14)
+        nodes = detect.detect(CH, 14, allow_users=ALLOW)
         self.assertEqual([n["ts"] for n in nodes], [fresh])
         self.assertEqual(nodes[0]["parent_ts"], old)
 
@@ -185,11 +222,11 @@ class Freshness(ClockFixed):
         """창을 가르던 시절의 사각지대 — 열흘 전 메시지에 오늘 ▶️ 를 달면 조용히 누락됐다.
         이모지를 언제 달았는지는 API 가 알려주지 않으므로, 창 안이면 잡는 쪽으로 둔다."""
         Fake([msg(self.ts(10), "옛 QA 목록", [emoji.TRIGGER])]).install()
-        self.assertEqual(len(detect.detect(CH, 14)), 1)
+        self.assertEqual(len(detect.detect(CH, 14, allow_users=ALLOW)), 1)
 
     def test_창_밖_노드는_잡히지_않는다(self):
         Fake([msg(self.ts(30), "아주 옛 지시", [emoji.TRIGGER])]).install()
-        self.assertEqual(detect.detect(CH, 14), [])
+        self.assertEqual(detect.detect(CH, 14, allow_users=ALLOW), [])
 
     def test_창_안에_답글이_없는_스레드는_열지_않는다(self):
         """불필요한 replies 호출 회피."""
@@ -203,7 +240,7 @@ class Freshness(ClockFixed):
         slack.replies = lambda channel, thread_ts, limit=200: (
             opened.append(thread_ts) or real(channel, thread_ts, limit))
 
-        self.assertEqual(detect.detect(CH, 14), [])
+        self.assertEqual(detect.detect(CH, 14, allow_users=ALLOW), [])
         self.assertEqual(opened, [])
 
 

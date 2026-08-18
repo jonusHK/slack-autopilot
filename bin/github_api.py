@@ -177,23 +177,41 @@ def checks(repo, ref):
     둘 중 하나만 보면 놓친다 — GitHub Actions 는 check run 으로, 외부 CI 는 status 로
     올라오는 것이 흔하다.
 
-    반환: {"state": "success"|"pending"|"failure", "failed": [이름...], "pending": [이름...]}
+    **읽을 수 없는 경우와 통과를 구분한다.** 실행 표면에 따라 이 두 엔드포인트가 통째로
+    막힌다(클라우드 세션의 GitHub 프록시는 checks·statuses 범위를 갖고 있지 않다 —
+    troubleshooting.md). 그때 예외로 죽으면 호출부가 "CI 실패"로 오해하고, 빈 결과로
+    degrade 하면 **아무 검사도 없는 커밋을 그린으로 읽는다.** 둘 다 나쁘다.
+
+    반환: {"state": "success"|"pending"|"failure"|"none"|"unreadable",
+           "failed": [...], "pending": [...], "unreadable": [엔드포인트...]}
     """
-    failed, pending = [], []
+    failed, pending, unreadable = [], [], []
 
-    runs = call(f"/repos/{repo}/commits/{ref}/check-runs?per_page=100").get("check_runs", [])
-    for r in runs:
-        if r.get("status") != "completed":
-            pending.append(r.get("name", "?"))
-        elif r.get("conclusion") not in ("success", "neutral", "skipped"):
-            failed.append(r.get("name", "?"))
+    try:
+        runs = call(f"/repos/{repo}/commits/{ref}/check-runs?per_page=100").get("check_runs", [])
+        for r in runs:
+            if r.get("status") != "completed":
+                pending.append(r.get("name", "?"))
+            elif r.get("conclusion") not in ("success", "neutral", "skipped"):
+                failed.append(r.get("name", "?"))
+    except GitHubError as e:
+        runs = []
+        unreadable.append(f"check-runs: {e}")
 
-    st = call(f"/repos/{repo}/commits/{ref}/status")
-    for s in st.get("statuses", []):
-        if s.get("state") == "pending":
-            pending.append(s.get("context", "?"))
-        elif s.get("state") not in ("success",):
-            failed.append(s.get("context", "?"))
+    try:
+        st = call(f"/repos/{repo}/commits/{ref}/status")
+        for s in st.get("statuses", []):
+            if s.get("state") == "pending":
+                pending.append(s.get("context", "?"))
+            elif s.get("state") not in ("success",):
+                failed.append(s.get("context", "?"))
+    except GitHubError as e:
+        st = {}
+        unreadable.append(f"commit-status: {e}")
+
+    if unreadable and not (runs or st.get("statuses")):
+        # 하나도 못 읽었다. **그린도 레드도 아니다** — 다른 수단으로 읽으라는 뜻이다.
+        return {"state": "unreadable", "failed": [], "pending": [], "unreadable": unreadable}
 
     if failed:
         state = "failure"
@@ -204,7 +222,8 @@ def checks(repo, ref):
     else:
         # 붙은 검사가 하나도 없다. "그린"이 아니라 "모름"이다 — 병합 판단은 사람 몫으로 넘긴다.
         state = "none"
-    return {"state": state, "failed": failed, "pending": pending}
+    return {"state": state, "failed": failed, "pending": pending,
+            "unreadable": unreadable}
 
 
 def main():

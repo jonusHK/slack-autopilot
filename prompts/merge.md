@@ -33,6 +33,8 @@ python3 bin/detect.py --all-projects --mode merge --days 14
 2. **CI 확인** — `python3 bin/github_api.py checks --repo <노드의 repo> --ref <head_sha>`.
    `success` 가 아니면 병합하지 않는다. ❌ + `failed` 의 검사 이름.
    `none`(붙은 검사 없음)은 통과가 아니다 — ❓ 로 사람에게 묻는다.
+   `unreadable`(이 표면에서 REST 로 못 읽음)이면 **세션의 GitHub 도구로 다시 읽는다.**
+   그래도 못 읽으면 ❓ 로 남긴다 — **읽지 못한 상태를 그린으로 보고 병합하지 않는다.**
 3. **금지선 확인**(정책 파일 `## 병합 금지선`). 아래에 걸리면 병합하지 말고 ❓ + 이유:
    - 정책이 나열한 금지선 파일이 충돌에 포함
    - 정책이 나열한 민감 경로가 diff 에 포함

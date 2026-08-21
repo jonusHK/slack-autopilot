@@ -36,7 +36,10 @@ import slack_api as slack
 # 제외해야 "다음 손이 필요한 것"이라는 정의가 성립한다.
 MODES = {
     "triage": (emoji.TRIGGER, (emoji.CLAIM, emoji.DONE, emoji.FAILED)),
-    "merge": (emoji.MERGE, (emoji.DONE,)),
+    # merge 도 ❌ 를 종료로 본다. 한때 ✅ 만 봤는데, 그러면 **사람이 접을 방법이 없다** —
+    # "이 건은 안 하겠다"고 ❌ 를 붙여도 매 실행 다시 잡혀 같은 안내가 반복됐다(실제로
+    # 닷새간 다섯 번). 🚀 를 떼는 것이 유일한 출구였고 그건 아무도 모른다.
+    "merge": (emoji.MERGE, (emoji.DONE, emoji.FAILED)),
 }
 
 

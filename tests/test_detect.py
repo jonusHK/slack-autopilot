@@ -123,6 +123,23 @@ class DetectRules(ClockFixed):
         self.assertEqual(detect.detect(CH, 7, allow_users=ALLOW), [])
 
 
+class MergeTerminal(ClockFixed):
+    """병합 모드의 종료 상태 — 사람이 접을 수 있어야 한다."""
+
+    def test_완료면_다시_잡지_않는다(self):
+        Fake([msg(t(60), "PR 링크", [emoji.MERGE, emoji.DONE])]).install()
+        self.assertEqual(detect.detect(CH, 7, mode="merge", allow_users=ALLOW), [])
+
+    def test_실패로_접은_것도_다시_잡지_않는다(self):
+        """❌ 는 '이 건은 안 한다'는 사람의 의사다 — 무시하면 같은 안내가 반복된다."""
+        Fake([msg(t(60), "PR 링크", [emoji.MERGE, emoji.FAILED])]).install()
+        self.assertEqual(detect.detect(CH, 7, mode="merge", allow_users=ALLOW), [])
+
+    def test_둘_다_없으면_잡는다(self):
+        Fake([msg(t(60), "PR 링크", [emoji.MERGE])]).install()
+        self.assertEqual(len(detect.detect(CH, 7, mode="merge", allow_users=ALLOW)), 1)
+
+
 class ReactorPermission(ClockFixed):
     """▶️·🚀 는 **누가 붙였는지가 곧 권한**이다 — 이름만 맞아도 안 된다."""
 

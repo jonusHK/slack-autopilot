@@ -5,13 +5,13 @@
 ## 1. 검출
 
 ```bash
-cd ~/slack-autopilot
-# .env 는 로컬 실행용 — VM 에는 없다(값은 환경변수). 있을 때만 읽는다.
-[ -f .env ] && { set -a; . ./.env; set +a; } || true   # 없어도 실패가 아니다
-python3 bin/detect.py --all-projects --mode merge --days 14
+~/slack-autopilot/bin/detect.py --all-projects --mode merge --days 14
 ```
 
 `[]` 이면 **아무 보고도 남기지 말고 즉시 종료**한다.
+
+엔진 스크립트는 항상 이 형태로 부른다 — 절대 경로, 인터프리터 없이, `cd` 없이, 앞뒤에
+파이프·echo 를 붙이지 않고(허용 규칙과 글자 단위로 맞아야 한다 — D-014, `implement.md` §1).
 
 노드마다 프로젝트가 다를 수 있다 — `<노드의 repo>` 는 그 노드의 `repo` 다.
 
@@ -26,11 +26,11 @@ python3 bin/detect.py --all-projects --mode merge --days 14
 
 각 PR 마다:
 
-1. `python3 bin/github_api.py pr-get --repo <노드의 repo> --pr <url>`
+1. `~/slack-autopilot/bin/github_api.py pr-get --repo <노드의 repo> --pr <url>`
    (바뀐 파일 목록은 `pr-files`, 병합은 `pr-merge`)
    - `merged` 가 참이면 ✅ 만 붙이고 넘어간다(재실행 안전).
    - `state` 가 `closed` 인데 병합이 아니면 ❌ 와 사유.
-2. **CI 확인** — `python3 bin/github_api.py checks --repo <노드의 repo> --ref <head_sha>`.
+2. **CI 확인** — `~/slack-autopilot/bin/github_api.py checks --repo <노드의 repo> --ref <head_sha>`.
    `success` 가 아니면 병합하지 않는다. ❌ + `failed` 의 검사 이름.
    `unreadable`(이 표면에서 REST 로 못 읽음)이면 **세션의 GitHub 도구로 다시 읽는다.**
    그래도 못 읽으면 ❓ 로 남긴다 — **읽지 못한 상태를 그린으로 보고 병합하지 않는다.**

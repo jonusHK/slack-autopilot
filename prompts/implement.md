@@ -8,13 +8,15 @@
 ## 1. 검출과 클레임
 
 ```bash
-cd ~/slack-autopilot
-# .env 는 로컬 실행용 — VM 에는 없다(값은 환경변수). 있을 때만 읽는다.
-[ -f .env ] && { set -a; . ./.env; set +a; } || true   # 없어도 실패가 아니다
-python3 bin/detect.py --all-projects --mode triage --days 14
+~/slack-autopilot/bin/detect.py --all-projects --mode triage --days 14
 ```
 
 `[]` 이면 **아무 보고도 남기지 말고 즉시 종료**한다. 대부분의 실행이 이 경로다.
+
+**엔진 스크립트는 항상 이 형태로 부른다** — 절대 경로, 인터프리터 없이, `cd` 없이, 앞뒤에
+파이프·echo 를 붙이지 않고. 루틴의 허용 규칙이 이 형태와 글자 단위로 맞아 분류기를 거치지
+않는다(D-014). 값은 환경변수에서 온다 — `.env` 를 기대하지 않는다(로컬 실행은 셸에서 미리
+`set -a; . ./.env; set +a`).
 
 **노드마다 프로젝트가 다를 수 있다.** 순회 모드는 선언된 전 프로젝트의 노드를 한 목록으로
 돌려주고, 각 노드에 `project`·`repo`·`channel` 이 실려 있다. 아래에서 `<노드의 repo>` 는
@@ -24,15 +26,15 @@ python3 bin/detect.py --all-projects --mode triage --days 14
 노드는 **오래된 것부터** 처리한다. 각 노드마다:
 
 1. **스레드를 먼저 읽는다** — 그 스레드에 **미병합 PR** 이 있는지 본다(봇의 📬 답글에 PR
-   링크가 있고, `python3 bin/github_api.py pr-get --repo <노드의 repo> --pr <url>` 의
+   링크가 있고, `~/slack-autopilot/bin/github_api.py pr-get --repo <노드의 repo> --pr <url>` 의
    `state` 가 `open` 이면 미병합).
 2. **락을 건다**(engine.md §3 — 이모지가 아니라 이것이 진짜 락):
    ```bash
-   python3 bin/lock.py --repo <노드의 repo> --ts <노드 ts>            # 새 작업
-   python3 bin/lock.py --repo <노드의 repo> --ts <ts> --reuse <브랜치> # 미병합 PR 이 있을 때
+   ~/slack-autopilot/bin/lock.py --repo <노드의 repo> --ts <노드 ts>            # 새 작업
+   ~/slack-autopilot/bin/lock.py --repo <노드의 repo> --ts <ts> --reuse <브랜치> # 미병합 PR 이 있을 때
    ```
    종료코드 1 이면 **다른 실행이 잡은 것** — 그 노드는 건너뛴다.
-3. 락을 잡은 뒤에 💬 를 붙인다(`bin/mark.py --emoji speech_balloon`).
+3. 락을 잡은 뒤에 💬 를 붙인다(`~/slack-autopilot/bin/mark.py … --emoji speech_balloon`).
 
 **순서를 지킨다: 스레드 확인 → 락 → 💬 → 작업.** 락 전에 작업을 시작하면 두 실행이 같은
 파일을 고치고 PR 이 둘 난다.
@@ -109,8 +111,8 @@ python3 bin/detect.py --all-projects --mode triage --days 14
 그 표면의 정규 수단으로 읽는다.
 
 ```bash
-python3 bin/github_api.py pr-get --repo <노드의 repo> --pr <pr-url>   # head_sha
-python3 bin/github_api.py checks --repo <노드의 repo> --ref <head_sha>
+~/slack-autopilot/bin/github_api.py pr-get --repo <노드의 repo> --pr <pr-url>   # head_sha
+~/slack-autopilot/bin/github_api.py checks --repo <노드의 repo> --ref <head_sha>
 ```
 
 | `state` | 뜻 | 할 일 |

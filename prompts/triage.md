@@ -19,7 +19,7 @@
 준비·검출 단계에서 막히면 세션 결과에 사유를 남기고 **채널에도 한 줄** 알린다:
 
 ```bash
-python3 bin/report_failure.py --channel "$SLACK_CHANNEL_ID" --reason "<한 줄 사유>"
+~/slack-autopilot/bin/report_failure.py --channel "$SLACK_CHANNEL_ID" --reason "<한 줄 사유>"
 ```
 
 유휴는 조용해야 하지만 **실패까지 조용하면 눈이 없다** — 2026-08-14 에 루틴이 두 번 연속
@@ -29,11 +29,11 @@ python3 bin/report_failure.py --channel "$SLACK_CHANNEL_ID" --reason "<한 줄 �
 ## 1. 검출
 
 ```bash
-cd ~/slack-autopilot
-# .env 는 로컬 실행용 — VM 에는 없다(값은 환경변수). 있을 때만 읽는다.
-[ -f .env ] && { set -a; . ./.env; set +a; } || true   # 없어도 실패가 아니다
-python3 bin/detect.py --all-projects --days 14
+~/slack-autopilot/bin/detect.py --all-projects --mode triage --days 14
 ```
+
+엔진 스크립트는 항상 이 형태로 부른다 — 절대 경로, 인터프리터 없이, `cd` 없이, 앞뒤에
+파이프·echo 를 붙이지 않고(허용 규칙과 글자 단위로 맞아야 한다 — D-014, `implement.md` §1).
 
 **결과가 `[]` 이면 아무것도 하지 말고 즉시 종료한다.** 요약도 보고도 남기지 않는다 —
 실행의 대부분이 이 경로이고, 여기서 토큰을 쓰면 유휴 비용이 0 이 아니게 된다.
@@ -55,7 +55,7 @@ python3 bin/detect.py --all-projects --days 14
 ### 3-1. 클레임
 
 ```bash
-python3 bin/mark.py --channel "$SLACK_CHANNEL_ID" --ts <노드 ts> --emoji speech_balloon
+~/slack-autopilot/bin/mark.py --channel "$SLACK_CHANNEL_ID" --ts <노드 ts> --emoji speech_balloon
 ```
 
 `already` 가 나오면(종료코드 1) **그 노드는 건너뛴다** — 다른 실행이 이미 잡았다.

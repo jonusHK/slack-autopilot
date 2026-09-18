@@ -1,6 +1,6 @@
 # 설계 — 런타임 (실제로 무엇이 어떤 순서로 도는가)
 
-- 상태: 초안 (2026-08-16 갱신) — 4단계(구현·PR)까지 관통 확인, 5단계 트리거 등록.
+- 상태: 초안 (2026-09-18 갱신 — auto mode 분류기·허용 규칙 D-014) — 4단계(구현·PR)까지 관통 확인, 5단계 트리거 등록.
 - `engine.md` 가 **무엇을·왜**(상태 기계·규칙)라면, 이 문서는 **어떻게 도는가**다 —
   실행 순서, 코드 맵, 실패 모드, 지금 되는 것과 안 되는 것. 규칙이 궁금하면 `engine.md`,
   등록 절차는 `../runbook/setup.md`, 결정의 근거는 `../decisions.md`.
@@ -64,6 +64,7 @@ sequenceDiagram
 | 홈이 내 것 | 이전 세션 잔재가 있을 수 있다 | 남은 디렉터리 재사용 → `rm -rf` 후 새로 받는다 |
 | 커넥터(MCP) 있음 | 없을 수 있다 | 슬랙을 커넥터로 부르지 않고 python 으로 직접 |
 | 도구 다 있음 | `allowed_tools` 로 제한 | 목록에 없는 도구를 전제한 절차 금지 |
+| 명령이 그냥 돈다 | **auto mode 분류기**가 매 셸 명령을 심사한다 — 엔진은 그 눈에 "외부 코드" | `python3 bin/detect.py`·`cd ~/slack-autopilot && …` 가 **실행마다 다르게** 거부됨 → 허용 규칙과 글자까지 같은 형태(`~/slack-autopilot/bin/detect.py …`)로만 부른다(D-014) |
 
 이 표의 항목은 `tests/test_prompts.py` 가 기계로 검사한다 — 사람 눈으로는 안 걸린다.
 
@@ -77,9 +78,9 @@ bin/
   mark.py        이모지 전이 + 스레드 답글
   lock.py        브랜치 락 — 구현 단계의 진짜 클레임(원격 ref 원자적 생성)
   report_failure.py  셋업 실패를 채널에 한 줄(실패까지 조용하면 눈이 없다)
-config.json      채널↔레포 매핑(값이 아니라 **환경변수 이름**)
 prompts/
-  bootstrap.md   **트리거 프롬프트 정본** — 세 트리거가 이 3줄로 같다
+  bootstrap.md   **트리거 프롬프트 정본** — 두 트리거가 치환 자리만 다르고 같다
+  allowed_tools.json  **트리거 allowed_tools 정본** — 엔진 명령을 분류기 앞에서 허용하는 규칙(D-014)
   triage.md      3단계 — 분류만(코드 생성 없음)
   implement.md   4단계 — 구현·PR·자기 수정
   merge.md       5단계 — 🚀 이후 순차 병합
@@ -234,6 +235,7 @@ python3 bin/lock.py --repo owner/name --ts <ts> --reuse <브랜치>  # 미병합
 | `gh: command not found` | **VM 에 `gh` 가 없다** — 설치돼 있다고 가정하지 않는다 | `gh` 를 쓰지 않는다. `bin/github_api.py` 가 REST API 를 직접 부른다 |
 | `could not read Username for 'https://github.com'` | **VM 에 GitHub 자격이 없다.** 엔진 레포는 퍼블릭이라 그냥 클론되지만, 대상 레포 push·PR 은 자격이 필요하다 | `github_api.setup_git()` 이 자격 저장 파일을 깔아둔다. 주소에는 토큰을 넣지 않는다 |
 | `GitHub access is not enabled for this session` (HTTP 403) | **루틴에 레포가 안 붙었거나 `allowed_tools` 로 조였다.** 토큰·App 문제가 아니다 | `session_context.sources` 를 넣고 도구 제한을 풀라 — 자세히는 [troubleshooting.md](../troubleshooting.md) |
+| `permission_denied Bash [classifier]: [Untrusted Code Integration]` / `[Code from External]` — **실행마다 다르게** | **auto mode 분류기**가 엔진(세션에 안 붙은 레포)의 클론·실행을 외부 코드로 본다. 판정은 확률적 | `prompts/allowed_tools.json` 의 허용 규칙을 트리거에 넣고, 명령은 그 규칙과 글자까지 같게(D-014) — [troubleshooting.md](../troubleshooting.md) |
 | 같은 노드가 두 번 처리됨 | 클레임 전에 작업을 시작했다 | 순서는 **클레임 → 작업**. 4단계에서는 브랜치 push 가 먼저 |
 | 봇이 자기 답글을 다시 집음 | ▶️ 를 봇이 붙였다는 뜻 — 있을 수 없다 | `emoji.assert_bot_may_add` 가 막는다. 뚫렸으면 그게 사고다 |
 

@@ -59,10 +59,26 @@ class PromptRules(unittest.TestCase):
         """
         clone_lines = [line.strip() for _, line in command_lines(BOOTSTRAP) if "git clone" in line]
         self.assertEqual(len(clone_lines), 1, "부트스트랩의 클론 명령은 정확히 한 줄이어야 한다")
-        self.assertNotIn("$", clone_lines[0], "클론 명령에 변수를 쓰면 허용 규칙과 맞지 않는다")
-        rm, clone = [s.strip() for s in clone_lines[0].split("&&")]
-        self.assertIn(f"Bash({rm})", RULES, f"rm 규칙이 allowed_tools.json 에 없다: {rm}")
+        clone = clone_lines[0]
+        self.assertNotIn("$", clone, "클론 명령에 변수를 쓰면 허용 규칙과 맞지 않는다")
+        # `rm -rf … &&` 를 앞에 두면 규칙이 맞아도 그 명령 전체가 분류기로 간다(2026-09-18 실측).
+        self.assertNotIn("rm -rf", clone, "클론 앞에 rm -rf 를 두지 않는다 — 분류기 심사 대상이 된다")
+        self.assertNotIn("&&", clone, "클론은 단일 명령이어야 규칙과 글자까지 같다")
         self.assertIn(f"Bash({clone})", RULES, f"클론 규칙이 allowed_tools.json 에 없다: {clone}")
+
+    def test_프롬프트가_분류기_우회를_말하지_않는다(self):
+        """분류기는 프롬프트를 읽는다. "허용 규칙과 대조되어 통과 / 분류기로 넘어간다"는 문장이
+        트리거에 들어가자 그 자체가 `[Auto-Mode Bypass]` 거부 사유가 됐다(2026-09-18 수동 실행).
+        왜 이런 형태인지는 펜스 밖 산문에만 적는다.
+        """
+        inside = False
+        for i, line in enumerate(BOOTSTRAP.read_text(encoding="utf-8").splitlines(), 1):
+            if line.lstrip().startswith("```"):
+                inside = not inside
+                continue
+            if inside:
+                for word in ("분류기", "허용 규칙", "classifier", "allowed_tools"):
+                    self.assertNotIn(word, line, f"bootstrap.md:{i} — 트리거 본문에서 '{word}' 를 뺄 것\n  {line.strip()}")
 
     def test_엔진_스크립트는_규칙이_맞는_형태로만_부른다(self):
         """`python3 bin/x.py` 도 `cd ~/slack-autopilot && bin/x.py` 도 안 된다.

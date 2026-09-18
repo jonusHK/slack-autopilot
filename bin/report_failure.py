@@ -50,7 +50,9 @@ def already_reported(channel, reason, hours=DEDUP_HOURS, limit=40):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--channel", required=True)
+    # --channel 을 생략하면 선언된 첫 프로젝트의 채널. 루틴 프롬프트가 "$SLACK_CHANNEL_ID_…" 같은
+    # 변수를 명령에 넣지 않게 하려는 것이다 — 허용 규칙은 명령을 글자 그대로 대조한다(D-014).
+    ap.add_argument("--channel", help="생략 시 AUTOPILOT_PROJECTS 의 첫 프로젝트 채널")
     ap.add_argument("--reason", required=True, help="한 줄. 값·토큰을 넣지 않는다")
     ap.add_argument(
         "--dedup-hours",
@@ -59,6 +61,14 @@ def main():
         help=f"같은 사유를 다시 알리기까지의 시간(기본 {DEDUP_HOURS}시간). 0 이면 항상 알린다.",
     )
     args = ap.parse_args()
+
+    if not args.channel:
+        import projects
+        try:
+            args.channel = projects.load()[0]["channel"]
+        except (SystemExit, IndexError, KeyError) as e:
+            print(f"채널을 정할 수 없다(선언 누락): {e}", file=sys.stderr)
+            return 2
 
     if args.dedup_hours > 0 and already_reported(args.channel, args.reason, args.dedup_hours):
         # 조용히 넘어가되 흔적은 남긴다 — 세션 로그에서 "왜 안 알렸나"를 볼 수 있어야 한다.

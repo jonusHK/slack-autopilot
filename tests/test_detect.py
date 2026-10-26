@@ -77,6 +77,16 @@ class DetectRules(ClockFixed):
         self.assertEqual([n["ts"] for n in nodes], [t(90)])
         self.assertEqual(nodes[0]["kind"], "message")
 
+    def test_순회_모드의_노드는_프로젝트와_레포를_싣는다(self):
+        """루틴은 노드의 repo 로 대상 레포를 정한다(D-011). 메시지·답글 둘 다 실려야 한다
+        — take() 가 넘기지 않아 null 로 나가던 회귀(2026-10-06 실패 보고)."""
+        parent = msg(t(90), "고쳐줘", [emoji.TRIGGER], reply_count=1, latest_reply=t(60))
+        Fake([parent], {t(90): [parent, msg(t(60), "이것도", [emoji.TRIGGER])]}).install()
+        nodes = detect.detect(CH, 7, allow_users=ALLOW, project="P", repo="o/r")
+        self.assertEqual([n["kind"] for n in nodes], ["message", "reply"])
+        for n in nodes:
+            self.assertEqual((n["project"], n["repo"]), ("P", "o/r"))
+
     def test_클레임된_메시지는_제외된다(self):
         Fake([msg(t(90), "고쳐줘", [emoji.TRIGGER, emoji.CLAIM])]).install()
         self.assertEqual(detect.detect(CH, 7, allow_users=ALLOW), [])

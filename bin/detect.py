@@ -86,7 +86,8 @@ def detect(channel, days, mode="triage", allow_users=None, project=None, repo=No
         # 밖의 사람이 붙인 것이면 없는 것으로 본다(채널 멤버 누구나 봇을 부리는 것을 막는다).
         if not (slack.reactors_of(msg).get(require, set()) & allow_users):
             return
-        found.append(_node(msg, channel, kind, parent_ts))
+        # project·repo 를 빠뜨리면 순회 모드의 노드가 대상 레포를 모른다(2026-10-06 실패).
+        found.append(_node(msg, channel, kind, parent_ts, project, repo))
 
     for msg in slack.history(channel, oldest=f"{cutoff:.6f}"):
         if msg.get("subtype") in {"channel_join", "channel_leave"}:

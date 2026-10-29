@@ -1,6 +1,6 @@
 # 설계 — 런타임 (실제로 무엇이 어떤 순서로 도는가)
 
-- 상태: 초안 (2026-09-18 갱신 — auto mode 분류기·허용 규칙 D-014) — 4단계(구현·PR)까지 관통 확인, 5단계 트리거 등록.
+- 상태: 초안 (2026-10-29 갱신 — 5단계 병합 실사용 확인 · 죽은 락 기준 둘 · 명령 형태 D-014·015 반영) — 1~5단계 가동, 6단계(동시 처리) 미구현.
 - `engine.md` 가 **무엇을·왜**(상태 기계·규칙)라면, 이 문서는 **어떻게 도는가**다 —
   실행 순서, 코드 맵, 실패 모드, 지금 되는 것과 안 되는 것. 규칙이 궁금하면 `engine.md`,
   등록 절차는 `../runbook/setup.md`, 결정의 근거는 `../decisions.md`.
@@ -11,26 +11,34 @@
 ```mermaid
 sequenceDiagram
     participant H as 사람 (슬랙)
-    participant T as 클라우드 트리거
+    participant T as 트리거 (:00 구현 · :30 병합)
     participant V as 세션 VM
     participant S as Slack API
     participant G as GitHub
 
     H->>S: 지시 메시지 + ▶️
-    Note over T: cron 이 깨운다 (KST 08~24시)
-    T->>V: 세션 시작 (환경변수 주입)
-    V->>G: 엔진 레포 clone/pull
-    V->>S: conversations.history / replies
+    Note over T: :00 — cron 이 깨운다 (KST 07~02시)
+    T->>V: 새 세션 (전용 환경의 환경변수)
+    V->>G: 엔진 레포 clone
+    V->>S: detect.py — history / replies
     alt ▶️ 있고 💬 없는 노드 없음
-        V-->>T: 침묵 종료 (유휴 비용 ~0)
+        V-->>T: 침묵 종료 (실행의 대부분)
     else 노드 있음
-        V->>S: reactions.add 💬 (클레임)
         V->>G: 대상 레포 clone → AUTOMATION.md
-        Note over V: 불릿 단위 티어 분류
-        V->>S: chat.postMessage (분류 답글) + ❓
+        Note over V: 불릿 단위 Q · A · B 분류
+        V->>G: lock.py — 빈 브랜치 auto/slack-ts push
+        V->>S: mark.py 💬 (클레임)
+        V->>G: 구현 → push → CI (실패면 고쳐서 다시, 5회/60분)
+        V->>G: PR 생성
+        V->>S: 답글(PR 링크·처리/보류 집계) + 📬 · Q 는 ✅ · B 는 ❓
     end
-    H->>S: (❓ 에) 결정 답글 + ▶️
-    Note over V: 다음 실행이 그 답글을 새 지시로 집는다
+    H->>S: (❓ 에) 결정 답글 + ▶️ — 다음 :00 이 새 지시로 집는다
+    H->>S: PR 을 읽고 PR 링크 답글에 🚀
+    Note over T: :30 — 병합 루틴
+    T->>V: 새 세션
+    V->>S: detect.py --mode merge (🚀 있고 ✅·❌ 없음)
+    V->>G: CI·금지선 확인 → 순차 병합
+    V->>S: 답글(무엇을·충돌을 어떻게) + ✅
 ```
 
 **핵심 성질 셋** — 이것이 이 설계의 전부다:
@@ -69,6 +77,45 @@ sequenceDiagram
 이 표의 항목은 `tests/test_prompts.py` 가 기계로 검사한다 — 사람 눈으로는 안 걸린다.
 
 ## 3. 코드 맵
+
+```mermaid
+flowchart LR
+    subgraph PR["prompts — 판단 (모델이 읽는다)"]
+        BS["bootstrap.md<br/>트리거 정본"]
+        IM["implement.md<br/>:00 구현"]
+        MG["merge.md<br/>:30 병합"]
+    end
+    subgraph BIN["bin — 결정 (테스트된 코드)"]
+        DT["detect.py<br/>노드 검출"]
+        MK["mark.py<br/>이모지·답글"]
+        LK["lock.py<br/>브랜치 락"]
+        GH["github_api.py<br/>PR·CI REST"]
+        RF["report_failure.py<br/>실패 한 줄"]
+        PJ["projects.py<br/>프로젝트 선언"]
+        EM["emoji.py<br/>상태 어휘 · 사람 전용 가드"]
+        SA["slack_api.py<br/>Web API"]
+    end
+    BS --> DT
+    BS --> RF
+    BS -- "노드 있으면" --> IM
+    BS -- "노드 있으면" --> MG
+    IM --> LK
+    IM --> MK
+    IM --> GH
+    MG --> MK
+    MG --> GH
+    DT --> PJ
+    DT --> EM
+    MK --> EM
+    LK --> GH
+    DT --> SA
+    MK --> SA
+    RF --> SA
+```
+
+화살표는 "부른다·가져다 쓴다"다. 모델이 직접 부르는 것은 `bin/*.py` 의 실행 진입점뿐이고,
+`emoji.py`·`slack_api.py` 는 그 아래에서만 쓰인다. 3단계 분류 전용 명세 `triage.md` 는 구현
+루틴이 생기기 전의 단계라 지금은 트리거가 부르지 않는다(`implement.md` 가 분류를 포함한다).
 
 ```
 bin/
@@ -112,7 +159,7 @@ scripts/
 ## 4. 검출 — `detect.py`
 
 ```
-python3 bin/detect.py --all-projects --days 14
+~/slack-autopilot/bin/detect.py --all-projects --mode triage --days 14
 ```
 
 1. `conversations.history(oldest = now - days)` 로 창을 읽는다(**기본 14일, 스캔·판정 공용**).
@@ -148,7 +195,7 @@ python3 bin/detect.py --all-projects --days 14
 ## 5. 클레임과 멱등성 — `mark.py`·`lock.py`
 
 ```
-python3 bin/mark.py --channel C… --ts 123.456 --emoji speech_balloon
+~/slack-autopilot/bin/mark.py --channel <노드의 channel> --ts 123.456 --emoji speech_balloon
 ```
 
 - `reactions.add` 가 이미 붙어 있으면 `already_reacted` 를 준다. 이것을 **test-and-set** 으로
@@ -162,8 +209,8 @@ python3 bin/mark.py --channel C… --ts 123.456 --emoji speech_balloon
 보조 장치로 부족하다.
 
 ```
-python3 bin/lock.py --repo owner/name --ts <노드 ts>          # 새 작업(락 획득)
-python3 bin/lock.py --repo owner/name --ts <ts> --reuse <브랜치>  # 미병합 PR 에 얹기
+~/slack-autopilot/bin/lock.py --repo <노드의 repo> --ts <노드 ts>          # 새 작업(락 획득)
+~/slack-autopilot/bin/lock.py --repo <노드의 repo> --ts <ts> --reuse <브랜치>  # 미병합 PR 에 얹기
 ```
 
 - 브랜치 이름은 노드 ts 에서 **유도**한다(`auto/slack-<ts>`) — 같은 노드는 늘 같은 이름이라
@@ -179,13 +226,29 @@ python3 bin/lock.py --repo owner/name --ts <ts> --reuse <브랜치>  # 미병합
 실행은 브랜치가 있어 건너뛰고, 메시지에는 💬 가 붙어 있어 분류 검출에도 안 잡힌다. 조용한
 교착이다. 그래서 회수 규칙을 둔다:
 
-**PR 이 하나도 없고**(열렸든 닫혔든) **브랜치가 `--stale-minutes`(기본 120분)보다 오래됐으면**
-죽은 락으로 보고 원격 브랜치를 지운 뒤 다시 잡는다(`mode: "reclaimed"`).
+**PR 이 하나도 없고**(열렸든 닫혔든) 브랜치가 충분히 오래됐으면 죽은 락으로 보고 원격 브랜치를
+지운 뒤 다시 잡는다(`mode: "reclaimed"`). "충분히"는 **브랜치에 커밋이 있는지로 갈린다**:
+
+```mermaid
+flowchart TD
+    B["락 브랜치가 이미 있다"] --> PR{"PR 이 있나<br/>(열림·닫힘 무관)"}
+    PR -->|"있음"| KEEP["회수 안 함 — 사람이 볼 일"]
+    PR -->|"조회 실패"| ERR["예외 — 모르면 손대지 않는다"]
+    PR -->|"없음"| CM{"기본 브랜치 대비<br/>커밋이 있나"}
+    CM -->|"있음"| T1{"120분 넘었나<br/>--stale-minutes"}
+    CM -->|"0건 (락만 잡고 죽음)"| T2{"20분 넘었나<br/>--empty-minutes"}
+    T1 -->|"예"| RC["브랜치 삭제 → 다시 잡음"]
+    T2 -->|"예"| RC
+    T1 -->|"아니오"| SKIP["건너뜀 — 살아 있는 작업일 수 있다"]
+    T2 -->|"아니오"| SKIP
+```
 
 - **PR 이 있으면 아무리 오래돼도 회수하지 않는다** — PR 을 열었다는 것은 그 실행이 최소한
   거기까지 갔다는 뜻이고, 그 뒤는 사람이 볼 일이다.
-- 기본값 120분은 자기 수정 상한(60분)의 두 배다. 살아 있는 작업을 뺏는 쪽이 교착보다 비싸서
-  넉넉히 잡는다.
+- 커밋이 있는 브랜치의 120분은 자기 수정 상한(60분)의 두 배다. 살아 있는 작업을 뺏는 쪽이
+  교착보다 비싸서 넉넉히 잡는다.
+- 빈 브랜치의 20분은 짧게 잡았다. 뺏을 작업이 없는데 120분을 기다리면 그동안 노드가 💬 때문에
+  검출에서도 빠져 **아무도 손대지 않는 교착**이 된다(4단계 첫 실행에서 실제로 겪었다).
 - **PR 조회가 실패하면 회수하지 않고 예외로 터진다.** 판단 불가일 때 회수하면 남의 작업을
   뺏는다 — 모르면 손대지 않는 쪽이 안전하다.
 - 규칙은 `tests/test_lock.py` 가 고정한다(경계값·PR 존재·조회 실패 포함).
@@ -255,15 +318,16 @@ python3 bin/lock.py --repo owner/name --ts <ts> --reuse <브랜치>  # 미병합
 | 1. 봇 앱·토큰·채널 추가 | ✅ 2026-08-14 |
 | 2. 엔진 스크립트 + 정책 파일 | ✅ (`bin/*` + 대상 레포의 `AUTOMATION.md`) |
 | 3. 검출·분류 루틴 | ✅ **작동 확인**(2026-08-14 실채널 관통) |
-| 4. 구현·PR + 자기 수정 | ✅ **관통 확인**(2026-08-16) — 검출 → 💬 → 락 브랜치 → 구현 → CI 그린 → PR → 📬 까지 사람 개입 없이. 트리거 3개 :00·:20·:40, KST 07~02시 |
-| 5. 병합 루틴(🚀) | 🔶 **트리거 등록**(:10, KST 07~02시) — 🚀 실사용 검증 아직 |
+| 4. 구현·PR + 자기 수정 | ✅ **관통 확인**(2026-08-16) — 검출 → 💬 → 락 브랜치 → 구현 → CI 그린 → PR → 📬 까지 사람 개입 없이. 트리거 1개 매시 :00(20분 간격 3개였다가 되돌림 — D-013) |
+| 5. 병합 루틴(🚀) | ✅ **실사용 확인**(2026-08-27) — 트리거 1개 매시 :30. 08-27 ~ 09-04 에 🚀 를 보고 9건 병합 |
+| (실적) | 2026-08-16 ~ 10-27 자동 PR 25건, 전부 병합 — 루틴 9건 · 사람이 GitHub 에서 직접 16건 |
 | 6. 동시 3개 확장 | ☐ 미구현 |
 
 4단계를 켜는 데 가장 오래 막힌 것은 분류 정확도가 아니라 **GitHub 접근**이었다 — 원인은
 루틴에 레포를 안 붙인 것과 `allowed_tools` 로 도구를 좁힌 것, **둘 다 우리 설정**이었다
 ([troubleshooting.md](../troubleshooting.md)). 다음 프로젝트를 붙일 때 여기서 시간을 태우지 않는다.
 
-5단계를 켜기 전에 확인할 것:
+5단계를 켜기 전에 확인했던 것(다음 프로젝트를 붙일 때도 같다):
 - 3단계 분류 정확도를 실사용 표본으로 본다. 분류가 틀린 채로 구현을 켜면 봇이 제품 결정을
   대신 내린다(그래서 단계를 나눈 것이다).
 - VM 에서 대상 레포에 **push 권한이 실제로 나오는지** 확인한다(GitHub 프록시 경유). 이건

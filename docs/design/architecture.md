@@ -1,5 +1,7 @@
 # 아키텍처
 
+- 상태: 초안 (2026-10-29 갱신 — 트리거 2개 · 한 번의 실행 그림 추가)
+
 전체 그림만 담는다. 규칙은 [engine.md](engine.md), 실행·실패 모드는 [runtime.md](runtime.md),
 근거는 [decisions.md](../decisions.md).
 
@@ -30,7 +32,7 @@ flowchart TB
         MSG["메시지·스레드<br/><b>이모지가 곧 상태</b>"]
     end
     subgraph CL["클라우드"]
-        TR["트리거 N개<br/>오프셋으로 주기 단축"]
+        TR["트리거 2개<br/>:00 구현 · :30 병합"]
         VM["세션 VM<br/>매 실행 새 세션·무상태"]
     end
     subgraph EN["엔진 레포"]
@@ -90,8 +92,8 @@ sequenceDiagram
     participant G as GitHub
     participant S as 슬랙
     Note over R1,R2: 같은 노드를 동시에 봤다
-    R1->>G: push auto/slack-&lt;ts&gt;
-    R2->>G: push auto/slack-&lt;ts&gt;
+    R1->>G: push auto/slack-{ts}
+    R2->>G: push auto/slack-{ts}
     G-->>R1: OK — ref 생성은 원자적
     G-->>R2: 거절 — 이미 있음
     R1->>S: 💬 클레임
@@ -129,3 +131,19 @@ flowchart LR
 트리거를 HTTP API 로 만들면 **레포 부착(`sources`)을 빠뜨릴 수 있다** — 웹 폼은 필수 단계라
 못 빠뜨린다. 빠뜨리면 클론·push·API 가 전부 막힌다. `allowed_tools` 로 도구를 좁히는 것도
 같은 결과를 낳는다. 둘 다 [troubleshooting.md](../troubleshooting.md).
+
+## 7. 한 번의 실행 — 유휴가 기본이다
+
+```mermaid
+flowchart LR
+    CR["cron<br/>:00 구현 · :30 병합"] --> VM["새 VM<br/>빈 샌드박스"]
+    VM --> CL["엔진 clone"]
+    CL --> DT{"detect.py"}
+    DT -->|"[] — 실행의 대부분"| EX["즉시 종료<br/>보고·요약 없음"]
+    DT -->|"노드 있음"| SP["그때 명세를 읽는다<br/>implement.md · merge.md"]
+    DT -->|"실패"| RF["report_failure.py<br/>채널에 한 줄 · 6시간 1회"]
+```
+
+**검출이 명세보다 먼저다.** 명세를 먼저 읽으면 할 일 없는 실행도 그 토큰을 매번 낸다. 반대로
+**실패는 반드시 채널에 보이게** 남긴다 — 유휴 침묵과 실패 침묵은 다르다. 주기는 플랫폼 최소인
+1시간이다: 20분으로 줄였을 때 하루 76회 중 실제로 일한 실행은 한 자릿수였다(D-013).
